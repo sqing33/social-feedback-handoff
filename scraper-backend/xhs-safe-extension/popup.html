@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mavis XHS Safe Bridge</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; }
+    body { width: 300px; margin: 0; padding: 16px; color: #202124; background: #fff; font-size: 13px; }
+    h1 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+    .version { color: #80868b; font-size: 11px; margin-bottom: 14px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #edf0f2; }
+    .label { color: #5f6368; }
+    .value { text-align: right; font-weight: 550; }
+    .ok { color: #188038; }
+    .warn { color: #b06000; }
+    .bad { color: #c5221f; }
+    .muted { color: #80868b; font-weight: 400; }
+    .path { max-width: 190px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .notice { margin-top: 12px; padding: 9px 10px; border-radius: 7px; background: #f8f9fa; color: #5f6368; line-height: 1.5; font-size: 11px; }
+    button { width: 100%; margin-top: 12px; padding: 7px 0; border: 0; border-radius: 6px; background: #1a73e8; color: #fff; cursor: pointer; font: inherit; }
+    button:active { background: #1557b0; }
+  </style>
+</head>
+<body>
+  <h1>Mavis XHS Safe Bridge</h1>
+  <div class="version" id="version">版本检测中…</div>
+  <div class="row"><span class="label">Bridge 服务</span><span class="value" id="bridge">检测中…</span></div>
+  <div class="row"><span class="label">受控小红书标签页</span><span class="value" id="tab">检测中…</span></div>
+  <div class="row"><span class="label">当前页面</span><span class="value path" id="path">/</span></div>
+  <div class="row"><span class="label">页面状态</span><span class="value" id="page">检测中…</span></div>
+  <div class="notice">本扩展只读取公开页面状态并执行固定卡片点击，不读取 Cookie、Token、请求或响应内容。</div>
+  <button id="refresh" type="button">刷新状态</button>
+  <script src="popup.js"></script>
+</body>
+</html>

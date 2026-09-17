@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>跨平台笔记监测</title>
+  <style>
+    :root {
+      --bg: #f4f7f5;
+      --panel: #ffffff;
+      --text: #17211c;
+      --muted: #66736c;
+      --line: #dfe7e2;
+      --soft: #f1f5f2;
+      --green: #087a55;
+      --green-dark: #066443;
+      --green-soft: #e8f6f0;
+      --danger: #b4233f;
+      --danger-soft: #fff0f2;
+      --warning: #8a5a00;
+      --warning-soft: #fff7df;
+      --shadow: 0 8px 30px rgba(20, 52, 36, 0.07);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .62; }
+    a { color: inherit; }
+
+    .app {
+      width: min(1880px, 100%);
+      margin: 0 auto;
+      padding: 22px;
+    }
+    .surface {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 18px 22px;
+      margin-bottom: 14px;
+    }
+    .header-copy { min-width: 0; }
+    .eyebrow {
+      margin-bottom: 4px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.18; letter-spacing: -.03em; }
+    h2 { font-size: 17px; line-height: 1.3; }
+    h3 { font-size: 14px; line-height: 1.35; }
+    .subtitle { margin-top: 5px; color: var(--muted); }
+    .header-stat {
+      flex: 0 0 auto;
+      padding: 9px 13px;
+      border: 1px solid #cce8da;
+      border-radius: 12px;
+      background: var(--green-soft);
+      color: var(--green-dark);
+      font-weight: 700;
+    }
+
+    .add-note {
+      display: grid;
+      grid-template-columns: 190px minmax(320px, 1fr) auto auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .add-mode-switch {
+      display: flex;
+      gap: 6px;
+      margin-top: 9px;
+    }
+    .mode-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 9px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .mode-btn.active { border-color: #b6ddca; background: var(--green-soft); color: var(--green-dark); }
+    .add-fields { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .add-field, .limit-input {
+      min-height: 39px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 0 11px;
+      outline: none;
+      color: var(--text);
+      background: #fff;
+    }
+    .add-field:focus, .limit-input:focus { border-color: rgba(8, 122, 85, .58); box-shadow: 0 0 0 3px rgba(8, 122, 85, .1); }
+    .platform-select { flex: 0 0 112px; }
+    .limit-wrap { display: flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: 12px; }
+    .limit-input { width: 76px; }
+    .hidden { display: none !important; }
+    .add-copy p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .url-input {
+      width: 100%;
+      min-height: 62px;
+      max-height: 118px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      color: var(--text);
+      background: #fff;
+    }
+    .url-input:focus, .search-input:focus {
+      border-color: rgba(8, 122, 85, .58);
+      box-shadow: 0 0 0 3px rgba(8, 122, 85, .1);
+    }
+    .favorite-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      color: #33443a;
+      font-weight: 650;
+    }
+    .favorite-option input { width: 16px; height: 16px; accent-color: var(--green); }
+    .btn {
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 11px;
+      padding: 0 13px;
+      background: var(--text);
+      color: #fff;
+      font-weight: 750;
+      transition: transform .16s ease, background .16s ease, border-color .16s ease;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn.primary { background: var(--green); }
+    .btn.primary:hover:not(:disabled) { background: var(--green-dark); }
+    .btn.secondary { border-color: var(--line); background: var(--soft); color: var(--text); }
+    .btn.danger { border-color: #f0c8d0; background: var(--danger-soft); color: var(--danger); }
+    .btn.small { min-height: 32px; padding: 0 10px; font-size: 12px; }
+
+    .login-manager {
+      margin-bottom: 14px;
+      padding: 14px 16px;
+    }
+    .login-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 11px;
+    }
+    .login-head p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .login-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+    .login-card { padding: 11px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
+    .login-card.ready { border-color: #b6ddca; background: var(--green-soft); }
+    .login-card.expired { border-color: #ead8a1; background: var(--warning-soft); }
+    .login-platform { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .login-platform strong { font-size: 14px; }
+    .login-state { color: var(--muted); font-size: 11px; font-weight: 750; }
+    .login-state.ready { color: var(--green-dark); }
+    .login-state.warning { color: var(--warning); }
+    .login-time { min-height: 17px; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .login-actions { display: flex; gap: 6px; margin-top: 9px; }
+    .login-actions .btn { flex: 1 1 0; padding-inline: 7px; }
+    .login-signal { margin-top: 10px; padding: 9px 11px; border-radius: 10px; background: var(--soft); color: var(--muted); font-size: 12px; font-weight: 700; }
+    .login-signal.ready { background: var(--green-soft); color: var(--green-dark); }
+    .login-signal.warning { background: var(--warning-soft); color: var(--warning); }
+
+    .status {
+      display: none;
+      margin: -2px 0 14px;
+      padding: 10px 13px;
+      border: 1px solid #cce8da;
+      border-radius: 12px;
+      background: var(--green-soft);
+      color: var(--green-dark);
+      overflow-wrap: anywhere;
+    }
+    .status.show { display: block; }
+    .status.error { border-color: #f0c8d0; background: var(--danger-soft); color: var(--danger); }
+    .status.warning { border-color: #ead8a1; background: var(--warning-soft); color: var(--warning); }
+    .status ul { margin: 7px 0 0; padding-left: 20px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 230px minmax(520px, 1.15fr) minmax(400px, .85fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .panel {
+      min-width: 0;
+      height: calc(100vh - 250px);
+      min-height: 590px;
+      padding: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .count {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .scroll { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+    .muted { color: var(--muted); }
+
+    .view-switch { display: grid; gap: 7px; margin-bottom: 14px; }
+    .view-btn, .date-btn {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fff;
+      color: var(--text);
+      text-align: left;
+      font-weight: 700;
+    }
+    .view-btn {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 11px;
+    }
+    .view-btn.active, .date-btn.active {
+      border-color: #b6ddca;
+      background: var(--green-soft);
+      color: var(--green-dark);
+    }
+    .nav-label {
+      padding: 12px 2px 7px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+    .date-list { display: grid; gap: 7px; }
+    .date-btn {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 10px;
+      font-size: 12px;
+    }
+
+    .search-input {
+      width: 100%;
+      height: 39px;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 0 11px;
+      outline: none;
+    }
+    .scope-note { margin: -2px 1px 11px; color: var(--muted); font-size: 11px; }
+    .platform-group + .platform-group { margin-top: 14px; }
+    .account-group { margin: 10px 0 0 8px; padding: 10px 0 0 11px; border-left: 2px solid #d7eee3; }
+    .account-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .account-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; }
+    .account-link { flex: 0 0 auto; color: var(--green-dark); font-size: 11px; text-decoration: none; }
+    .account-link:hover { text-decoration: underline; }
+    .platform-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding: 0 2px;
+    }
+    .platform-name { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+    .platform-mark { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    .note-list { display: grid; gap: 8px; }
+    .note-card {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 12px;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--text);
+      text-align: left;
+      transition: border-color .16s ease, background .16s ease;
+    }
+    .note-card:hover { border-color: #afd9c4; }
+    .note-card.active { border-color: var(--green); background: #f5fbf8; }
+    .thumb {
+      width: 86px;
+      height: 86px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: var(--soft);
+    }
+    .thumb-empty {
+      width: 86px;
+      height: 86px;
+      display: grid;
+      place-items: center;
+      padding: 8px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+    .note-main { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+    .note-title {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      font-size: 14px;
+      font-weight: 780;
+      line-height: 1.4;
+    }
+    .note-meta, .metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .metric-row { margin-top: 5px; color: #34453b; }
+    .favorite-tag { color: var(--green-dark); font-weight: 750; }
+
+    .detail-scroll { min-height: 0; overflow-y: auto; padding-right: 2px; }
+    .detail-visual {
+      width: 100%;
+      max-height: 290px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--soft);
+    }
+    .detail-visual-empty {
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      background: var(--soft);
+      color: var(--muted);
+    }
+    .image-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 8px;
+    }
+    .image-strip img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 9px; border: 1px solid var(--line); }
+    .media-summary { margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .detail-title { margin-top: 13px; font-size: 21px; line-height: 1.35; letter-spacing: -.02em; overflow-wrap: anywhere; }
+    .detail-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+      margin-top: 11px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfb;
+    }
+    .meta-item { min-width: 0; }
+    .meta-item span { display: block; color: var(--muted); font-size: 11px; }
+    .meta-item strong { display: block; margin-top: 2px; overflow-wrap: anywhere; font-size: 12px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .metric-box { padding: 9px; border: 1px solid var(--line); border-radius: 11px; background: var(--soft); }
+    .metric-box span { color: var(--muted); font-size: 11px; }
+    .metric-box strong { display: block; margin-top: 2px; font-size: 16px; }
+    .history-list { display: grid; gap: 6px; }
+    .history-row { display: grid; grid-template-columns: minmax(112px, 1.35fr) repeat(4, minmax(58px, .8fr)); gap: 7px; align-items: center; padding: 8px 9px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfb; font-size: 11px; }
+    .history-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-row .history-time { color: var(--muted); }
+    .detail-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .detail-section h3 { margin-bottom: 7px; }
+    .summary { white-space: pre-wrap; overflow-wrap: anywhere; color: #38473f; font-size: 13px; }
+    .detail-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+    .source-link { text-decoration: none; display: inline-flex; align-items: center; }
+    .comment-list { display: grid; gap: 8px; }
+    .comment {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fbfcfb;
+    }
+    .comment-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; font-size: 11px; color: var(--muted); }
+    .comment-author { color: var(--text); font-weight: 750; }
+    .comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .comment-foot { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .comment-error { margin-top: 8px; color: var(--warning); font-size: 11px; overflow-wrap: anywhere; }
+    .empty {
+      padding: 28px 16px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty strong { display: block; margin-bottom: 4px; color: var(--text); }
+
+    @media (max-width: 1180px) {
+      .login-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workspace { grid-template-columns: 210px minmax(0, 1fr); }
+      .detail-panel { grid-column: 1 / -1; height: auto; min-height: 420px; }
+      .detail-scroll { overflow: visible; }
+    }
+    @media (max-width: 760px) {
+      .app { width: 100%; padding: 10px; }
+      .header { align-items: flex-start; padding: 15px; }
+      .header-stat { display: none; }
+      h1 { font-size: 23px; }
+      .add-note { grid-template-columns: 1fr; padding: 13px; }
+      .login-head { align-items: flex-start; }
+      .login-grid { grid-template-columns: 1fr; }
+      .login-actions { flex-wrap: wrap; }
+      .add-fields { flex-direction: column; align-items: stretch; }
+      .platform-select { flex-basis: auto; }
+      .favorite-option { white-space: normal; }
+      .add-note .btn { width: 100%; }
+      .workspace { grid-template-columns: minmax(0, 1fr); }
+      .panel, .detail-panel { height: auto; min-height: 0; overflow: visible; }
+      .scroll, .detail-scroll { max-height: none; overflow: visible; }
+      .note-card { grid-template-columns: 72px minmax(0, 1fr); }
+      .thumb, .thumb-empty { width: 72px; height: 82px; }
+      .detail-meta { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .history-row { grid-template-columns: 1fr 1fr; }
+      .history-row .history-time { grid-column: 1 / -1; }
+      .image-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="surface header">
+      <div class="header-copy">
+        <div class="eyebrow">PUBLIC NOTE DATA</div>
+        <h1>跨平台笔记监测</h1>
+        <p class="subtitle">通过笔记链接、账号主页或分平台关键词搜索，获取真实公开内容。</p>
+      </div>
+      <div class="header-stat" id="headerStat">正在读取笔记</div>
+    </header>
+
+    <section class="surface add-note" aria-labelledby="addTitle">
+      <div class="add-copy">
+        <h2 id="addTitle">添加内容</h2>
+        <p id="addHint">粘贴一条真实笔记链接</p>
+        <div class="add-mode-switch" role="tablist" aria-label="添加方式">
+          <button class="mode-btn active" type="button" data-mode="link">笔记链接</button>
+          <button class="mode-btn" type="button" data-mode="account">账号主页</button>
+          <button class="mode-btn" type="button" data-mode="search">关键词搜索</button>
+        </div>
+      </div>
+      <div class="add-fields">
+        <select class="add-field platform-select hidden" id="sourcePlatform" aria-label="平台">
+          <option value="小红书">小红书</option>
+          <option value="抖音">抖音</option>
+          <option value="快手">快手</option>
+          <option value="B站">B站</option>
+        </select>
+        <textarea class="url-input" id="urlInput" aria-label="笔记链接，每行一条" placeholder="每行粘贴一条真实笔记链接"></textarea>
+      </div>
+      <label class="limit-wrap hidden" id="limitWrap">获取 <input class="limit-input" id="limitInputMirror" type="number" min="1" max="50" value="20" aria-label="搜索数量" /> 条</label>
+      <label class="favorite-option"><input type="checkbox" id="importFavorite" />导入后直接收藏</label>
+      <button class="btn primary" id="importBtn">添加并获取数据</button>
+    </section>
+
+    <section class="surface login-manager" aria-labelledby="loginTitle">
+      <div class="login-head">
+        <div>
+          <h2 id="loginTitle">平台登录确认</h2>
+          <p>选择平台打开可见 Chrome，完成登录后点击“确认已登录”。系统只记录确认状态，不保存或显示 Cookie。</p>
+        </div>
+        <button class="btn secondary small" id="refreshLoginBtn" type="button">重新检测</button>
+      </div>
+      <div class="login-grid" id="loginGrid" aria-live="polite"></div>
+      <div class="login-signal" id="loginSignal" role="status">正在检测四大平台登录状态…</div>
+    </section>
+
+    <div class="status" id="statusBar" role="status" aria-live="polite"></div>
+
+    <section class="workspace">
+      <aside class="surface panel">
+        <div class="panel-head"><h2>视图与日期</h2><span class="count" id="dateCount">0 个日期</span></div>
+        <div class="view-switch">
+          <button class="view-btn active" data-view="all"><span>全部笔记</span><span id="allCount">0</span></button>
+          <button class="view-btn" data-view="favorites"><span>收藏集</span><span id="favoriteCount">0</span></button>
+          <button class="view-btn" data-view="accounts"><span>账号信息</span><span id="accountCount">0</span></button>
+        </div>
+        <div class="nav-label">发布日期</div>
+        <div class="scroll"><div class="date-list" id="dateList"></div></div>
+      </aside>
+
+      <section class="surface panel">
+        <div class="panel-head"><h2 id="listTitle">全部笔记</h2><span class="count" id="visibleCount">0 条</span></div>
+        <input class="search-input" id="searchInput" type="search" placeholder="搜索标题、账号、平台或原链接" />
+        <p class="scope-note">仅搜索已经保存的笔记</p>
+        <div class="scroll" id="noteList"></div>
+      </section>
+
+      <section class="surface panel detail-panel">
+        <div class="panel-head"><h2>笔记详情</h2><span class="count" id="detailStatus">未选择</span></div>
+        <div class="detail-scroll" id="detailArea"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = window.location.origin;
+    const UNKNOWN_DATE = '__unknown_date__';
+    let records = [];
+    let selectedId = null;
+    let selectedView = 'all';
+    let selectedDate = 'all';
+    let searchQuery = '';
+    let importBusy = false;
+    let refreshBusy = false;
+    let addMode = 'link';
+    const LOGIN_PLATFORMS = [
+      { key: 'xhs', name: '小红书' },
+      { key: 'douyin', name: '抖音' },
+      { key: 'kuaishou', name: '快手' },
+      { key: 'bilibili', name: 'B站' }
+    ];
+    let loginStatus = { platforms: [], readyCount: 0, allReady: false, ok: false, error: '' };
+    const loginBusy = new Set();
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function safeUrl(value) {
+      const raw = String(value ?? '').trim();
+      if (!raw) return '';
+      try {
+        const url = new URL(raw);
+        return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function stableProfileUrl(value) {
+      const url = safeUrl(value);
+      if (!url) return '';
+      try {
+        const parsed = new URL(url);
+        parsed.search = '';
+        parsed.hash = '';
+        return parsed.href;
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function firstPresent(object, keys) {
+      if (!object || typeof object !== 'object') return null;
+      for (const key of keys) {
+        if (Object.prototype.hasOwnProperty.call(object, key) && object[key] !== null && object[key] !== '') {
+          return object[key];
+        }
+      }
+      return null;
+    }
+
+    function displayNumber(value) {
+      if (value === null || value === undefined || value === '') return '—';
+      const number = Number(value);
+      return Number.isFinite(number) ? new Intl.NumberFormat('zh-CN').format(number) : '—';
+    }
+
+    function displayText(value, fallback = '—') {
+      const text = String(value ?? '').trim();
+      return text || fallback;
+    }
+
+    function authorName(value) {
+      if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+      if (value && typeof value === 'object') {
+        return displayText(value.nickname || value.author || value.name || value.username, '');
+      }
+      return '';
+    }
+
+    function metricValues(published) {
+      const metrics = published && typeof published.metrics === 'object' ? published.metrics : {};
+      return {
+        views: firstPresent(metrics, ['views', 'view_count', 'play_count']),
+        likes: firstPresent(metrics, ['likes', 'like_count', 'digg_count']),
+        saves: firstPresent(metrics, ['saves', 'favorites', 'collects', 'collect_count', 'favorite_count']),
+        comments: firstPresent(metrics, ['comments', 'comment_count'])
+      };
+    }
+
+    function normalizeRecord(item) {
+      const source = item && typeof item === 'object' ? item : {};
+      const published = source.published && typeof source.published === 'object' ? source.published : {};
+      const publishedImages = Array.isArray(published.images) ? published.images : [];
+      const sourceImages = Array.isArray(source.images) ? source.images : [];
+      const images = (publishedImages.length ? publishedImages : sourceImages)
+        .map(safeUrl)
+        .filter(Boolean);
+      const title = displayText(published.title || source.published_title || source.topic, '未获取到标题');
+      const description = displayText(source.original_text || published.description || source.published_description || source.note, '');
+      const rawDate = displayText(source.date || published.published_date, '');
+      const date = rawDate === '日期待识别' ? '' : rawDate;
+      const time = displayText(source.time || published.published_time, '');
+      const platform = displayText(published.platform, '平台待识别');
+      const feedback = source.feedback && typeof source.feedback === 'object' ? source.feedback : {};
+      const platformFeedback = feedback[platform] && typeof feedback[platform] === 'object' ? feedback[platform] : {};
+      const accountName = displayText(source.account_name || authorName(published.author) || platformFeedback.account, '账号待识别');
+      const importSource = displayText(source.import_source || platformFeedback.source, '');
+      return {
+        ...source,
+        id: source.id,
+        favorite: Boolean(source.favorite),
+        published,
+        title,
+        description,
+        platform,
+        author: accountName,
+        accountName,
+        accountProfileUrl: stableProfileUrl(source.account_profile_url || ''),
+        importSource,
+        isAccountImport: importSource === 'account_import',
+        date,
+        time,
+        capturedAt: displayText(published.captured_at || source.updated_at, ''),
+        cover: safeUrl(published.cover || source.cover),
+        mediaType: displayText(published.media_type, ''),
+        images,
+        originalUrl: safeUrl(source.original_url || source.published_url || published.url),
+        metrics: metricValues(published),
+        metricHistory: Array.isArray(source.metric_history) ? source.metric_history : [],
+        comments: Array.isArray(published.comments_data) ? published.comments_data : [],
+        commentsError: displayText(published.comments_error, '')
+      };
+    }
+
+    function sortRecords(items) {
+      return items.slice().sort((a, b) => {
+        if (!a.date && b.date) return 1;
+        if (a.date && !b.date) return -1;
+        return `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`, 'zh-CN');
+      });
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+      });
+      const text = await response.text();
+      let data = {};
+      if (text) {
+        try { data = JSON.parse(text); }
+        catch (_) { throw new Error(`服务返回了无法解析的数据（HTTP ${response.status}）`); }
+      }
+      if (!response.ok) throw new Error(data.error || data.message || `请求失败（HTTP ${response.status}）`);
+      return data;
+    }
+
+    function setStatus(message, type = 'success', failures = []) {
+      const bar = document.getElementById('statusBar');
+      if (!message) {
+        bar.className = 'status';
+        bar.textContent = '';
+        return;
+      }
+      const failureHtml = failures.length
+        ? `<ul>${failures.map(item => `<li>${escapeHtml(item.url || '未知链接')}：${escapeHtml(item.error || '获取失败')}</li>`).join('')}</ul>`
+        : '';
+      bar.className = `status show ${type === 'success' ? '' : type}`.trim();
+      bar.innerHTML = `<strong>${escapeHtml(message)}</strong>${failureHtml}`;
+    }
+
+    function normalizeLoginStatus(data) {
+      const items = Array.isArray(data?.platforms) ? data.platforms : [];
+      const byKey = new Map(items.map(item => [item.key, item]));
+      const platforms = LOGIN_PLATFORMS.map(definition => ({
+        ...definition,
+        ...(byKey.get(definition.key) || {}),
+        confirmed: Boolean(byKey.get(definition.key)?.confirmed),
+        logged_in: Boolean(byKey.get(definition.key)?.logged_in),
+        ready: Boolean(byKey.get(definition.key)?.ready)
+      }));
+      return {
+        platforms,
+        readyCount: platforms.filter(item => item.ready).length,
+        allReady: platforms.every(item => item.ready),
+        ok: Boolean(data?.ok),
+        error: displayText(data?.error, '')
+      };
+    }
+
+    function loginStateLabel(item) {
+      if (item.ready) return { label: '已确认并在线', tone: 'ready', card: 'ready' };
+      if (item.logged_in) return { label: '已登录，待确认', tone: 'warning', card: '' };
+      if (item.confirmed) return { label: '登录已失效', tone: 'warning', card: 'expired' };
+      return { label: '未确认', tone: '', card: '' };
+    }
+
+    function renderLoginStatus() {
+      const grid = document.getElementById('loginGrid');
+      grid.innerHTML = loginStatus.platforms.map(item => {
+        const state = loginStateLabel(item);
+        const busy = loginBusy.has(item.key);
+        const confirmedAt = item.confirmed_at ? `上次确认：${escapeHtml(String(item.confirmed_at).replace('T', ' '))}` : '尚未确认登录';
+        return `<article class="login-card ${state.card}">
+          <div class="login-platform"><strong>${escapeHtml(item.name)}</strong><span class="login-state ${state.tone}">${state.label}</span></div>
+          <div class="login-time">${confirmedAt}</div>
+          <div class="login-actions">
+            <button class="btn secondary small" type="button" data-login-action="open" data-platform="${escapeHtml(item.key)}" ${busy ? 'disabled' : ''}>打开登录页</button>
+            <button class="btn primary small" type="button" data-login-action="confirm" data-platform="${escapeHtml(item.key)}" ${busy || item.ready ? 'disabled' : ''}>${item.ready ? '确认成功' : '确认已登录'}</button>
+          </div>
+        </article>`;
+      }).join('');
+      const signal = document.getElementById('loginSignal');
+      if (loginStatus.allReady) {
+        signal.className = 'login-signal ready';
+        signal.textContent = '✓ 确认成功：4 大平台均已登录，后续抓取将复用持久登录会话。';
+      } else if (!loginStatus.ok && loginStatus.error) {
+        signal.className = 'login-signal warning';
+        signal.textContent = `暂时无法检测实时登录状态：${loginStatus.error}`;
+      } else {
+        signal.className = 'login-signal';
+        signal.textContent = `登录确认进度：${loginStatus.readyCount} / ${LOGIN_PLATFORMS.length}。完成平台登录后，请点击对应的“确认已登录”。`;
+      }
+    }
+
+    async function loadLoginStatus() {
+      const data = await api('/api/login-status');
+      loginStatus = normalizeLoginStatus(data);
+      renderLoginStatus();
+      return loginStatus;
+    }
+
+    async function openPlatformLogin(platform) {
+      if (loginBusy.has(platform)) return;
+      const definition = LOGIN_PLATFORMS.find(item => item.key === platform);
+      if (!definition) return;
+      loginBusy.add(platform);
+      renderLoginStatus();
+      try {
+        const data = await api(`/api/login/${encodeURIComponent(platform)}/open`, { method: 'POST', body: '{}' });
+        const current = loginStatus.platforms.find(item => item.key === platform);
+        if (current) current.logged_in = Boolean(data.logged_in);
+        renderLoginStatus();
+        setStatus(data.logged_in
+          ? `${definition.name}已检测到登录态，请点击“确认已登录”完成确认。`
+          : `${definition.name}登录页已在专用可见 Chrome 中打开；登录完成后回到这里点击“确认已登录”。`);
+      } catch (error) {
+        setStatus(`打开${definition.name}登录页失败：${error.message}`, 'error');
+      } finally {
+        loginBusy.delete(platform);
+        renderLoginStatus();
+      }
+    }
+
+    async function confirmPlatformLogin(platform) {
+      if (loginBusy.has(platform)) return;
+      const definition = LOGIN_PLATFORMS.find(item => item.key === platform);
+      if (!definition) return;
+      loginBusy.add(platform);
+      renderLoginStatus();
+      try {
+        const data = await api(`/api/login/${encodeURIComponent(platform)}/confirm`, { method: 'POST', body: '{}' });
+        loginStatus = normalizeLoginStatus(data.status || {});
+        renderLoginStatus();
+        setStatus(data.all_ready
+          ? '确认成功：4 大平台登录状态已全部就绪，后续抓取将直接复用。'
+          : `${definition.name}登录确认成功；该平台后续抓取将复用当前登录态。`);
+      } catch (error) {
+        await loadLoginStatus().catch(() => {});
+        setStatus(`${definition.name}登录确认失败：${error.message}`, 'error');
+      } finally {
+        loginBusy.delete(platform);
+        renderLoginStatus();
+      }
+    }
+
+    async function loadRecords(options = {}) {
+      const data = await api('/api/archives');
+      const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
+      records = sortRecords(items.map(normalizeRecord));
+      if (options.preferId !== undefined) selectedId = options.preferId;
+      if (!records.some(item => String(item.id) === String(selectedId))) selectedId = records[0]?.id ?? null;
+      render();
+    }
+
+    function recordsForSelectedView() {
+      if (selectedView === 'favorites') return records.filter(item => item.favorite);
+      if (selectedView === 'accounts') return records.filter(item => item.isAccountImport);
+      return records;
+    }
+
+    function scopedRecords() {
+      const byView = recordsForSelectedView();
+      return byView.filter(item => {
+        const itemDate = item.date || UNKNOWN_DATE;
+        const dateMatch = selectedDate === 'all' || itemDate === selectedDate;
+        const searchBlob = [item.title, item.accountName, item.author, item.platform, item.originalUrl].join(' ').toLowerCase();
+        return dateMatch && (!searchQuery || searchBlob.includes(searchQuery));
+      });
+    }
+
+    function dateLabel(key) {
+      return key === UNKNOWN_DATE ? '日期待识别' : key;
+    }
+
+    function publishedTime(item) {
+      if (!item.date) return '日期待识别';
+      return item.time ? `${item.date} ${item.time}` : item.date;
+    }
+
+    function renderNavigation() {
+      const viewRecords = recordsForSelectedView();
+      const dateKeys = Array.from(new Set(viewRecords.map(item => item.date || UNKNOWN_DATE)))
+        .sort((a, b) => {
+          if (a === UNKNOWN_DATE) return 1;
+          if (b === UNKNOWN_DATE) return -1;
+          return b.localeCompare(a);
+        });
+      if (selectedDate !== 'all' && !dateKeys.includes(selectedDate)) selectedDate = 'all';
+      document.getElementById('allCount').textContent = records.length;
+      document.getElementById('favoriteCount').textContent = records.filter(item => item.favorite).length;
+      document.getElementById('accountCount').textContent = records.filter(item => item.isAccountImport).length;
+      document.getElementById('dateCount').textContent = `${dateKeys.length} 个日期`;
+      document.querySelectorAll('.view-btn').forEach(button => {
+        button.classList.toggle('active', button.dataset.view === selectedView);
+      });
+      const entries = [{ key: 'all', label: '全部日期', count: viewRecords.length }, ...dateKeys.map(key => ({
+        key,
+        label: dateLabel(key),
+        count: viewRecords.filter(item => (item.date || UNKNOWN_DATE) === key).length
+      }))];
+      document.getElementById('dateList').innerHTML = entries.length
+        ? entries.map(entry => `<button class="date-btn ${selectedDate === entry.key ? 'active' : ''}" data-date="${escapeHtml(entry.key)}"><span>${escapeHtml(entry.label)}</span><span>${entry.count}</span></button>`).join('')
+        : '<div class="empty">暂无日期</div>';
+    }
+
+    function renderCard(item) {
+      const image = item.cover
+        ? `<img class="thumb" src="${escapeHtml(item.cover)}" alt="${escapeHtml(item.title)}" loading="lazy" referrerpolicy="no-referrer" />`
+        : '<div class="thumb-empty">暂无公开封面</div>';
+      return `<button class="note-card ${String(selectedId) === String(item.id) ? 'active' : ''}" data-note-id="${escapeHtml(item.id)}">
+        ${image}
+        <span class="note-main">
+          <span class="note-title">${escapeHtml(item.title)}</span>
+          <span>
+            <span class="note-meta"><span>${escapeHtml(item.author)}</span><span>${escapeHtml(publishedTime(item))}</span>${item.favorite ? '<span class="favorite-tag">已收藏</span>' : ''}</span>
+            <span class="metric-row"><span>点赞 ${displayNumber(item.metrics.likes)}</span><span>收藏 ${displayNumber(item.metrics.saves)}</span><span>评论 ${displayNumber(item.metrics.comments)}</span></span>
+          </span>
+        </span>
+      </button>`;
+    }
+
+    function renderList() {
+      const list = scopedRecords();
+      const accountView = selectedView === 'accounts';
+      document.getElementById('listTitle').textContent = accountView ? '账号信息' : (selectedView === 'favorites' ? '收藏集' : '全部笔记');
+      document.getElementById('visibleCount').textContent = `${list.length} 条`;
+      if (!list.length) {
+        const title = records.length ? (accountView ? '还没有账号主页笔记' : '没有匹配的笔记') : '还没有保存笔记';
+        const copy = records.length ? (accountView ? '从上方选择“账号主页”并导入后，作品会按平台和具体账号归类到这里。' : '请调整视图、日期或搜索条件。') : '在上方粘贴真实笔记链接后获取公开数据。';
+        document.getElementById('noteList').innerHTML = `<div class="empty"><strong>${title}</strong>${copy}</div>`;
+        return;
+      }
+      const platformGroups = new Map();
+      list.forEach(item => {
+        if (!platformGroups.has(item.platform)) platformGroups.set(item.platform, []);
+        platformGroups.get(item.platform).push(item);
+      });
+      document.getElementById('noteList').innerHTML = Array.from(platformGroups.entries()).map(([platform, items]) => {
+        if (!accountView) {
+          return `<section class="platform-group">
+            <div class="platform-head"><div class="platform-name"><span class="platform-mark"></span>${escapeHtml(platform)}</div><span class="muted">${items.length} 条</span></div>
+            <div class="note-list">${items.map(renderCard).join('')}</div>
+          </section>`;
+        }
+        const accountGroups = new Map();
+        items.forEach(item => {
+          const key = item.accountProfileUrl || item.accountName || '账号待识别';
+          if (!accountGroups.has(key)) accountGroups.set(key, []);
+          accountGroups.get(key).push(item);
+        });
+        return `<section class="platform-group">
+          <div class="platform-head"><div class="platform-name"><span class="platform-mark"></span>${escapeHtml(platform)}</div><span class="muted">${items.length} 条</span></div>
+          ${Array.from(accountGroups.values()).map(accountItems => {
+            const account = accountItems[0];
+            const accountLink = account.accountProfileUrl
+              ? `<a class="account-link" href="${escapeHtml(account.accountProfileUrl)}" target="_blank" rel="noopener noreferrer">查看主页</a>`
+              : '';
+            return `<section class="account-group">
+              <div class="account-head"><span class="account-name">${escapeHtml(account.accountName)}</span>${accountLink}<span class="muted">${accountItems.length} 条</span></div>
+              <div class="note-list">${accountItems.map(renderCard).join('')}</div>
+            </section>`;
+          }).join('')}
+        </section>`;
+      }).join('');
+    }
+
+    function formatEventTime(value) {
+      if (value === null || value === undefined || value === '') return '—';
+      const numeric = Number(value);
+      const date = Number.isFinite(numeric)
+        ? new Date(numeric < 100000000000 ? numeric * 1000 : numeric)
+        : new Date(String(value));
+      if (Number.isNaN(date.getTime())) return displayText(value);
+      return new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+      }).format(date);
+    }
+
+    function renderComment(comment) {
+      const source = comment && typeof comment === 'object' ? comment : {};
+      const user = source.user_info && typeof source.user_info === 'object' ? source.user_info : {};
+      const author = displayText(user.nickname || source.author || source.nickname, '公开用户');
+      const content = displayText(source.content || source.text, '');
+      const likes = firstPresent(source, ['like_count', 'likes']);
+      const time = formatEventTime(firstPresent(source, ['create_time_text', 'create_time']));
+      return `<article class="comment">
+        <div class="comment-head"><span class="comment-author">${escapeHtml(author)}</span><span>${escapeHtml(time)}</span></div>
+        <div class="comment-body">${escapeHtml(content || '—')}</div>
+        <div class="comment-foot">点赞 ${displayNumber(likes)}</div>
+      </article>`;
+    }
+
+    function renderDetail() {
+      const item = records.find(record => String(record.id) === String(selectedId));
+      const status = document.getElementById('detailStatus');
+      const area = document.getElementById('detailArea');
+      if (!item) {
+        status.textContent = '未选择';
+        area.innerHTML = '<div class="empty"><strong>请选择一条笔记</strong>选中中栏笔记后，这里会显示真实公开数据。</div>';
+        return;
+      }
+      status.textContent = item.favorite ? '已收藏' : '已选中';
+      const mainImage = item.cover || item.images[0] || '';
+      const visual = mainImage
+        ? `<img class="detail-visual" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" referrerpolicy="no-referrer" />`
+        : '<div class="detail-visual-empty">暂无公开图片</div>';
+      const stripImages = item.images.filter(url => url !== mainImage);
+      const strip = stripImages.length
+        ? `<div class="image-strip">${stripImages.map((url, index) => `<img src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} 图片 ${index + 1}" loading="lazy" referrerpolicy="no-referrer" />`).join('')}</div>`
+        : '';
+      const mediaSummary = item.mediaType === 'video'
+        ? (mainImage ? '<p class="media-summary">视频封面 1 张；未把视频页面其他图片当成笔记图片。</p>' : '<p class="media-summary">未获取到可靠的视频封面。</p>')
+        : `<p class="media-summary">笔记图片 ${item.images.length} 张（包含封面）。</p>`;
+      const sourceLink = item.originalUrl
+        ? `<a class="btn secondary small source-link" href="${escapeHtml(item.originalUrl)}" target="_blank" rel="noopener noreferrer">查看原文</a>`
+        : '<button class="btn secondary small" disabled>暂无原文链接</button>';
+      const comments = item.comments.length
+        ? `<div class="comment-list">${item.comments.map(renderComment).join('')}</div>`
+        : '<div class="empty">尚未获取到公开评论内容</div>';
+      const commentsError = item.commentsError ? `<div class="comment-error">评论获取状态：${escapeHtml(item.commentsError)}</div>` : '';
+      const history = item.metricHistory.length
+        ? `<div class="history-list">${item.metricHistory.slice(0, 8).map(entry => `<div class="history-row">
+            <span class="history-time">${escapeHtml(formatEventTime(entry.captured_at))}</span>
+            <span>浏览 ${displayNumber(entry.views)}</span>
+            <span>点赞 ${displayNumber(entry.likes)}</span>
+            <span>收藏 ${displayNumber(entry.saves)}</span>
+            <span>评论 ${displayNumber(entry.comments)}</span>
+          </div>`).join('')}</div>`
+        : '<div class="empty">更新数据后，这里会显示真实指标的历史记录</div>';
+      area.innerHTML = `
+        ${visual}${strip}${mediaSummary}
+        <h3 class="detail-title">${escapeHtml(item.title)}</h3>
+        <div class="detail-meta">
+          <div class="meta-item"><span>平台</span><strong>${escapeHtml(item.platform)}</strong></div>
+          <div class="meta-item"><span>账号</span><strong>${escapeHtml(item.author)}</strong></div>
+          <div class="meta-item"><span>发布时间</span><strong>${escapeHtml(publishedTime(item))}</strong></div>
+          <div class="meta-item"><span>抓取时间</span><strong>${escapeHtml(displayText(item.capturedAt))}</strong></div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-box"><span>浏览</span><strong>${displayNumber(item.metrics.views)}</strong></div>
+          <div class="metric-box"><span>点赞</span><strong>${displayNumber(item.metrics.likes)}</strong></div>
+          <div class="metric-box"><span>收藏</span><strong>${displayNumber(item.metrics.saves)}</strong></div>
+          <div class="metric-box"><span>评论</span><strong>${displayNumber(item.metrics.comments)}</strong></div>
+        </div>
+        <section class="detail-section"><h3>数据变化</h3>${history}</section>
+        <section class="detail-section"><h3>原文摘要</h3><div class="summary">${escapeHtml(item.description || '尚未获取到公开原文摘要')}</div></section>
+        <div class="detail-actions">
+          ${sourceLink}
+          <button class="btn primary small" data-action="refresh" ${refreshBusy ? 'disabled' : ''}>${refreshBusy ? '正在更新' : '更新数据'}</button>
+          <button class="btn secondary small" data-action="favorite">${item.favorite ? '取消收藏' : '加入收藏'}</button>
+          <button class="btn danger small" data-action="delete">删除笔记</button>
+        </div>
+        <section class="detail-section"><h3>公开评论</h3>${comments}${commentsError}</section>
+      `;
+    }
+
+    function render() {
+      document.getElementById('headerStat').textContent = `${records.length} 条已保存笔记`;
+      renderNavigation();
+      renderList();
+      renderDetail();
+    }
+
+    function setAddMode(mode) {
+      addMode = mode;
+      const platform = document.getElementById('sourcePlatform');
+      const limitWrap = document.getElementById('limitWrap');
+      const textarea = document.getElementById('urlInput');
+      const favorite = document.getElementById('importFavorite');
+      const button = document.getElementById('importBtn');
+      const hint = document.getElementById('addHint');
+      document.querySelectorAll('.mode-btn').forEach(item => item.classList.toggle('active', item.dataset.mode === mode));
+      platform.classList.toggle('hidden', mode === 'link');
+      limitWrap.classList.toggle('hidden', mode === 'link');
+      favorite.classList.toggle('hidden', mode !== 'link');
+      if (mode === 'link') {
+        hint.textContent = '每行粘贴一条真实笔记链接';
+        textarea.placeholder = '每行粘贴一条真实笔记链接';
+        button.textContent = '添加并获取数据';
+      } else if (mode === 'account') {
+        hint.textContent = '输入平台账号主页，按发布时间从新到旧获取作品';
+        textarea.placeholder = '粘贴一个账号主页链接';
+        button.textContent = '发现并添加作品';
+      } else {
+        hint.textContent = '按平台搜索公开内容，并优先添加点赞最高的作品';
+        textarea.placeholder = '输入关键词，例如：AI 工具、旅行攻略';
+        button.textContent = '搜索并添加作品';
+      }
+    }
+
+    async function importNotes() {
+      if (importBusy) return;
+      const textarea = document.getElementById('urlInput');
+      const platform = document.getElementById('sourcePlatform').value;
+      const limitField = document.getElementById('limitInputMirror');
+      const limit = Math.min(50, Math.max(1, Number.parseInt(limitField.value, 10) || 20));
+      limitField.value = limit;
+      const rawValue = textarea.value.trim();
+      let endpoint = '/api/notes/import';
+      let payload;
+      let invalid = [];
+      if (addMode === 'link') {
+        const uniqueLines = Array.from(new Set(rawValue.split(/\r?\n/).map(line => line.trim()).filter(Boolean)));
+        const validUrls = uniqueLines.filter(safeUrl);
+        invalid = uniqueLines.filter(value => !safeUrl(value)).map(url => ({ url, error: '不是有效的 HTTP/HTTPS 链接' }));
+        if (!uniqueLines.length) { setStatus('请先粘贴至少一条真实笔记链接。', 'error'); return; }
+        if (!validUrls.length) { setStatus('没有可提交的有效链接。', 'error', invalid); return; }
+        payload = { urls: validUrls, favorite: document.getElementById('importFavorite').checked };
+        setStatus(`正在逐条获取 ${validUrls.length} 条笔记的公开数据；平台请求间隔 5–10 秒…`);
+      } else if (addMode === 'account') {
+        if (!safeUrl(rawValue)) { setStatus('请粘贴有效的账号主页链接。', 'error'); return; }
+        endpoint = '/api/notes/account-import';
+        payload = { profile_url: rawValue, platform, limit };
+        setStatus(`正在从${platform}账号主页按最新顺序获取最多 ${limit} 条作品；平台请求间隔 5–10 秒…`);
+      } else {
+        if (!rawValue) { setStatus('请输入搜索关键词。', 'error'); return; }
+        endpoint = '/api/notes/search-import';
+        payload = { keyword: rawValue, platform, limit };
+        setStatus(`正在${platform}搜索“${rawValue}”，并按点赞数获取最高的 ${limit} 条；平台请求间隔 5–10 秒…`);
+      }
+      importBusy = true;
+      const button = document.getElementById('importBtn');
+      button.disabled = true;
+      button.textContent = '正在获取数据';
+      try {
+        const data = await api(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+        const imported = Array.isArray(data.items) ? data.items : [];
+        const failures = [...invalid, ...(Array.isArray(data.failures) ? data.failures : [])];
+        const preferId = imported[0]?.id;
+        if (addMode === 'account' && imported.length) selectedView = 'accounts';
+        await loadRecords({ preferId: preferId !== undefined ? preferId : selectedId });
+        if (imported.length) textarea.value = '';
+        if (failures.length) setStatus(`成功保存 ${imported.length} 条，另有 ${failures.length} 条未能导入。`, imported.length ? 'warning' : 'error', failures);
+        else setStatus(`已成功获取并保存 ${imported.length} 条内容。`);
+      } catch (error) {
+        setStatus(`添加失败：${error.message}`, 'error');
+      } finally {
+        importBusy = false;
+        button.disabled = false;
+        setAddMode(addMode);
+      }
+    }
+
+    async function refreshSelected() {
+      const item = records.find(record => String(record.id) === String(selectedId));
+      if (!item || refreshBusy) return;
+      refreshBusy = true;
+      renderDetail();
+      try {
+        const data = await api(`/api/archives/${encodeURIComponent(item.id)}/refresh`, { method: 'POST' });
+        if (!data.item) throw new Error('服务未返回更新后的笔记');
+        const updated = normalizeRecord(data.item);
+        records = sortRecords(records.map(record => String(record.id) === String(item.id) ? updated : record));
+        selectedId = updated.id;
+        setStatus('笔记公开数据已更新。');
+      } catch (error) {
+        setStatus(`更新失败：${error.message}`, 'error');
+      } finally {
+        refreshBusy = false;
+        render();
+      }
+    }
+
+    async function toggleFavorite() {
+      const item = records.find(record => String(record.id) === String(selectedId));
+      if (!item) return;
+      try {
+        const data = await api(`/api/archives/${encodeURIComponent(item.id)}/favorite`, {
+          method: 'POST',
+          body: JSON.stringify({ favorite: !item.favorite })
+        });
+        const updated = data.item ? normalizeRecord(data.item) : { ...item, favorite: !item.favorite };
+        records = records.map(record => String(record.id) === String(item.id) ? updated : record);
+        setStatus(updated.favorite ? '已加入收藏集。' : '已取消收藏。');
+        render();
+      } catch (error) {
+        setStatus(`收藏操作失败：${error.message}`, 'error');
+      }
+    }
+
+    async function deleteSelected() {
+      const item = records.find(record => String(record.id) === String(selectedId));
+      if (!item || !window.confirm(`确认删除“${item.title}”？此操作不会删除平台原文。`)) return;
+      try {
+        await api(`/api/archives/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+        records = records.filter(record => String(record.id) !== String(item.id));
+        selectedId = records[0]?.id ?? null;
+        setStatus('笔记记录已删除。');
+        render();
+      } catch (error) {
+        setStatus(`删除失败：${error.message}`, 'error');
+      }
+    }
+
+    document.querySelector('.add-mode-switch').addEventListener('click', event => {
+      const button = event.target.closest('.mode-btn');
+      if (button && !importBusy) setAddMode(button.dataset.mode);
+    });
+    document.getElementById('importBtn').addEventListener('click', importNotes);
+    document.getElementById('refreshLoginBtn').addEventListener('click', async event => {
+      event.currentTarget.disabled = true;
+      event.currentTarget.textContent = '检测中';
+      try {
+        const status = await loadLoginStatus();
+        setStatus(status.allReady ? '4 大平台登录状态均已确认并在线。' : `已完成登录状态检测：${status.readyCount} / ${LOGIN_PLATFORMS.length} 个平台就绪。`);
+      } catch (error) {
+        setStatus(`检测登录状态失败：${error.message}`, 'error');
+      } finally {
+        event.currentTarget.disabled = false;
+        event.currentTarget.textContent = '重新检测';
+      }
+    });
+    document.getElementById('loginGrid').addEventListener('click', event => {
+      const button = event.target.closest('[data-login-action]');
+      if (!button) return;
+      if (button.dataset.loginAction === 'open') openPlatformLogin(button.dataset.platform);
+      if (button.dataset.loginAction === 'confirm') confirmPlatformLogin(button.dataset.platform);
+    });
+    document.getElementById('searchInput').addEventListener('input', event => {
+      searchQuery = event.target.value.trim().toLowerCase();
+      renderList();
+    });
+    document.querySelector('.view-switch').addEventListener('click', event => {
+      const button = event.target.closest('.view-btn');
+      if (!button) return;
+      selectedView = button.dataset.view;
+      selectedDate = 'all';
+      render();
+    });
+    document.getElementById('dateList').addEventListener('click', event => {
+      const button = event.target.closest('.date-btn');
+      if (!button) return;
+      selectedDate = button.dataset.date;
+      render();
+    });
+    document.getElementById('noteList').addEventListener('click', event => {
+      const card = event.target.closest('.note-card');
+      if (!card) return;
+      selectedId = card.dataset.noteId;
+      render();
+    });
+    document.getElementById('detailArea').addEventListener('click', event => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'refresh') refreshSelected();
+      if (action === 'favorite') toggleFavorite();
+      if (action === 'delete') deleteSelected();
+    });
+
+    setAddMode('link');
+    loginStatus = normalizeLoginStatus({});
+    renderLoginStatus();
+    loadLoginStatus().catch(error => {
+      loginStatus = normalizeLoginStatus({ ok: false, error: error.message });
+      renderLoginStatus();
+    });
+    loadRecords().catch(error => {
+      records = [];
+      selectedId = null;
+      render();
+      setStatus(`读取笔记失败：${error.message}`, 'error');
+    });
+  </script>
+</body>
+</html>

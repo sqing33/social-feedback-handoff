@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Mavis XHS Safe Bridge",
+  "version": "0.1.0",
+  "description": "受限读取小红书公开页面状态；不读取 Cookie、请求或响应内容。",
+  "permissions": [
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://xiaohongshu.com/*",
+    "https://www.xiaohongshu.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Mavis XHS Safe Bridge"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:9333"
+  }
+}

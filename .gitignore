@@ -1,0 +1,17 @@
+.venv*/
+.runtime/
+.env
+.env.*
+__pycache__/
+*.py[cod]
+*.db
+*.db-*
+*.db.bak*
+*.log
+*.pid
+*.zip
+.DS_Store
+.formal*
+.audit*
+scraper-backend/data/
+panel/social_feedback.db*
