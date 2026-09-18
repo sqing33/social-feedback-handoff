@@ -24,7 +24,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -33,6 +33,12 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse, urlu
 from urllib.request import Request, urlopen
 
 from flask import Flask, abort, jsonify, request, send_file
+
+from ai_service import (
+    enqueue_job as enqueue_ai_job,
+    load_config as load_ai_config,
+    normalize_topic,
+)
 
 logger = logging.getLogger("social-feedback-panel")
 
@@ -46,6 +52,8 @@ PUBLIC_ONLY_SET = set(PUBLIC_ONLY_PLATFORMS)
 PLATFORMS = [*PRIMARY_SYNC_PLATFORMS, *PUBLIC_ONLY_PLATFORMS]
 ACCOUNT_SYNC_PLATFORMS = set(PRIMARY_SYNC_PLATFORMS)
 ASSET_KINDS = {"cover", "image"}
+ANALYTICS_METRIC_FIELDS = ("views", "likes", "saves", "comments", "shares")
+ENGAGEMENT_METRIC_FIELDS = ("likes", "saves", "comments", "shares")
 
 FETCH_INTERVAL_PLATFORMS = {
     "xhs": "小红书",
@@ -561,7 +569,7 @@ def extract_wechat_public_snapshot(html_text: str, base_meta: Dict[str, Any]) ->
     return {
         "title": title,
         "author": author,
-        "metrics": {"views": None, "likes": None, "saves": None, "comments": None},
+        "metrics": {"views": None, "likes": None, "saves": None, "comments": None, "shares": None},
         "extra_metrics": {},
     }
 
@@ -1306,16 +1314,22 @@ def normalize_service_note_info(platform: str, note_info: Dict[str, Any], conten
         raw.get("replyCount"),
         raw.get("reply"),
     )
-    extra_metrics: Dict[str, Any] = {}
-    share_count = first_count_value(
+    shares = first_optional_count_value(
+        nested_value(raw, "metrics", "shares"),
+        nested_value(raw, "metrics", "share_count"),
         nested_value(raw, "interact_info", "shared_count"),
         nested_value(raw, "interactInfo", "sharedCount"),
+        nested_value(raw, "statistics", "share_count"),
+        nested_value(raw, "stats", "shareCount"),
         raw.get("share_count"),
         raw.get("shared_count"),
         raw.get("shareCount"),
+        raw.get("reposts"),
+        raw.get("repost_count"),
     )
-    if share_count:
-        extra_metrics["shares"] = share_count
+    extra_metrics: Dict[str, Any] = {}
+    if shares is not None:
+        extra_metrics["shares"] = shares
     coins = first_count_value(raw.get("coin_count"), raw.get("coins"), nested_value(raw, "statistics", "coin_count"))
     if coins:
         extra_metrics["coins"] = coins
@@ -1359,7 +1373,7 @@ def normalize_service_note_info(platform: str, note_info: Dict[str, Any], conten
         "media_type": media_type,
         "cover": cover,
         "images": images,
-        "metrics": {"views": views, "likes": likes, "saves": saves, "comments": comments},
+        "metrics": {"views": views, "likes": likes, "saves": saves, "comments": comments, "shares": shares},
         "metric_presence": metric_presence,
         "extra_metrics": extra_metrics,
         "publish_time": publish_ts,
@@ -1628,7 +1642,7 @@ def capture_link_snapshot(
             "author": "",
             "cover": "",
             "images": [],
-            "metrics": {"views": None, "likes": None, "saves": None, "comments": None},
+            "metrics": {"views": None, "likes": None, "saves": None, "comments": None, "shares": None},
             "collection_mode": connector_info["sync_scope"],
             "error": "微信公众号后台链接不参与同步，只允许公开文章页 / 公开页抓取",
             "captured_at": now_iso(),
@@ -1697,7 +1711,7 @@ def capture_link_snapshot(
                     "author": "",
                     "cover": "",
                     "images": [],
-                    "metrics": {"views": None, "likes": None, "saves": None, "comments": None},
+                    "metrics": {"views": None, "likes": None, "saves": None, "comments": None, "shares": None},
                     "collection_mode": connector_info["sync_scope"],
                     "extra_metrics": {},
                     "missing_fields": sorted(REQUIRED_CAPTURE_FIELDS),
@@ -1747,7 +1761,7 @@ def capture_link_snapshot(
             "author": "",
             "cover": "",
             "images": [],
-            "metrics": {"views": None, "likes": None, "saves": None, "comments": None},
+            "metrics": {"views": None, "likes": None, "saves": None, "comments": None, "shares": None},
             "collection_mode": connector_info["sync_scope"],
             "error": str(exc),
             "captured_at": now_iso(),
@@ -1822,14 +1836,19 @@ def record_metric_snapshot(
     captured_at: str,
     source: str,
 ) -> None:
-    values = {key: optional_metric_int((metrics or {}).get(key)) for key in ("views", "likes", "saves", "comments")}
+    values = {
+        key: optional_metric_int((metrics or {}).get(key))
+        for key in ("views", "likes", "saves", "comments", "shares")
+    }
     if not any(value is not None for value in values.values()):
         return
     ts = now_iso()
     conn.execute(
         """
-        INSERT INTO metric_history(id, archive_id, platform, views, likes, saves, comments, captured_at, source, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO metric_history(
+            id, archive_id, platform, views, likes, saves, comments, shares, captured_at, source, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             f"mh_{uuid.uuid4().hex[:12]}",
@@ -1839,6 +1858,7 @@ def record_metric_snapshot(
             values["likes"],
             values["saves"],
             values["comments"],
+            values["shares"],
             captured_at or ts,
             source,
             ts,
@@ -1854,6 +1874,24 @@ def save_note_snapshot(
     favorite: Optional[bool] = None,
     source: str = "link_capture",
 ) -> str:
+    archive_id, _created = save_note_snapshot_with_status(
+        conn,
+        url,
+        snapshot,
+        favorite=favorite,
+        source=source,
+    )
+    return archive_id
+
+
+def save_note_snapshot_with_status(
+    conn: sqlite3.Connection,
+    url: str,
+    snapshot: Dict[str, Any],
+    *,
+    favorite: Optional[bool] = None,
+    source: str = "link_capture",
+) -> Tuple[str, bool]:
     if snapshot.get("status") != "fetched":
         raise ValueError(snapshot.get("error") or "真实笔记抓取未成功")
     title = first_text_value(snapshot.get("title"), snapshot.get("description"))
@@ -1871,7 +1909,10 @@ def save_note_snapshot(
     published_time = first_text_value(snapshot.get("published_time"))
     author = first_text_value(snapshot.get("author"), snapshot.get("site_name"))
     description = first_text_value(snapshot.get("description"))
-    metrics = snapshot.get("metrics") if isinstance(snapshot.get("metrics"), dict) else {}
+    metrics = dict(snapshot.get("metrics")) if isinstance(snapshot.get("metrics"), dict) else {}
+    extra_metrics = snapshot.get("extra_metrics") if isinstance(snapshot.get("extra_metrics"), dict) else {}
+    if metrics.get("shares") is None and extra_metrics.get("shares") is not None:
+        metrics["shares"] = extra_metrics.get("shares")
     images = [item for item in (snapshot.get("images") or []) if str(item).strip()]
     cover = first_text_value(snapshot.get("cover"), images[0] if images else "")
     ts = now_iso()
@@ -1918,15 +1959,16 @@ def save_note_snapshot(
         feedback_metrics = dict(metrics)
         feedback_metrics["account"] = author
         upsert_feedback(conn, archive_id, platform, feedback_metrics, source=source, commit=False)
-        record_metric_snapshot(
-            conn,
-            archive_id,
-            platform,
-            metrics,
-            first_text_value(snapshot.get("captured_at"), ts),
-            source,
-        )
-    return archive_id
+        if existing is None or source == "refresh":
+            record_metric_snapshot(
+                conn,
+                archive_id,
+                platform,
+                metrics,
+                first_text_value(snapshot.get("captured_at"), ts),
+                source,
+            )
+    return archive_id, existing is None
 
 
 def init_db() -> None:
@@ -1968,6 +2010,7 @@ def init_db() -> None:
                 likes INTEGER,
                 saves INTEGER,
                 comments INTEGER,
+                shares INTEGER,
                 source TEXT NOT NULL DEFAULT 'manual',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -1983,6 +2026,7 @@ def init_db() -> None:
                 likes INTEGER,
                 saves INTEGER,
                 comments INTEGER,
+                shares INTEGER,
                 captured_at TEXT NOT NULL,
                 source TEXT NOT NULL DEFAULT 'link_capture',
                 created_at TEXT NOT NULL,
@@ -2033,6 +2077,66 @@ def init_db() -> None:
                 last_status TEXT NOT NULL DEFAULT 'unknown',
                 last_error TEXT NOT NULL DEFAULT ''
             );
+
+            CREATE TABLE IF NOT EXISTS content_topics (
+                id TEXT PRIMARY KEY,
+                archive_id TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                normalized_topic TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'ai',
+                confidence REAL NOT NULL DEFAULT 0,
+                confirmed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (archive_id, normalized_topic),
+                FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_content_topics_confirmed
+            ON content_topics(normalized_topic, confirmed);
+
+            CREATE TABLE IF NOT EXISTS ai_jobs (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                scope_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'queued',
+                input_fingerprint TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                provider TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                prompt_version TEXT NOT NULL DEFAULT '',
+                queued_at TEXT NOT NULL,
+                started_at TEXT NOT NULL DEFAULT '',
+                finished_at TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_jobs_queue
+            ON ai_jobs(status, queued_at);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_jobs_active_fingerprint
+            ON ai_jobs(kind, scope_type, scope_id, input_fingerprint, prompt_version)
+            WHERE status IN ('queued', 'running');
+
+            CREATE TABLE IF NOT EXISTS ai_insights (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                scope_id TEXT NOT NULL,
+                input_fingerprint TEXT NOT NULL,
+                input_snapshot_json TEXT NOT NULL DEFAULT '{}',
+                result_json TEXT NOT NULL DEFAULT '{}',
+                evidence_json TEXT NOT NULL DEFAULT '[]',
+                provider TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                prompt_version TEXT NOT NULL DEFAULT '',
+                generated_at TEXT NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES ai_jobs(id) ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_insights_fingerprint
+            ON ai_insights(kind, scope_type, scope_id, input_fingerprint, prompt_version);
+            CREATE INDEX IF NOT EXISTS idx_ai_insights_scope
+            ON ai_insights(scope_type, scope_id, generated_at DESC);
             """
         )
         cols = {row["name"] for row in conn.execute("PRAGMA table_info(archives)").fetchall()}
@@ -2045,7 +2149,14 @@ def init_db() -> None:
         if "account" not in cols:
             conn.execute("ALTER TABLE feedback ADD COLUMN account TEXT NOT NULL DEFAULT ''")
             feedback_info = conn.execute("PRAGMA table_info(feedback)").fetchall()
-        metric_columns = {"views", "likes", "saves", "comments"}
+            cols = {row["name"] for row in feedback_info}
+        if "shares" not in cols:
+            conn.execute("ALTER TABLE feedback ADD COLUMN shares INTEGER")
+        metric_info = conn.execute("PRAGMA table_info(metric_history)").fetchall()
+        metric_cols = {row["name"] for row in metric_info}
+        if "shares" not in metric_cols:
+            conn.execute("ALTER TABLE metric_history ADD COLUMN shares INTEGER")
+        metric_columns = {"views", "likes", "saves", "comments", "shares"}
         if any(row["name"] in metric_columns and int(row["notnull"]) for row in feedback_info):
             conn.executescript(
                 """
@@ -2059,14 +2170,17 @@ def init_db() -> None:
                     likes INTEGER,
                     saves INTEGER,
                     comments INTEGER,
+                    shares INTEGER,
                     source TEXT NOT NULL DEFAULT 'manual',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE (archive_id, platform),
                     FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
                 );
-                INSERT INTO feedback(id, archive_id, platform, account, views, likes, saves, comments, source, created_at, updated_at)
-                SELECT id, archive_id, platform, account, views, likes, saves, comments, source, created_at, updated_at
+                INSERT INTO feedback(
+                    id, archive_id, platform, account, views, likes, saves, comments, shares, source, created_at, updated_at
+                )
+                SELECT id, archive_id, platform, account, views, likes, saves, comments, shares, source, created_at, updated_at
                 FROM feedback_legacy_notnull;
                 DROP TABLE feedback_legacy_notnull;
                 """
@@ -2183,7 +2297,7 @@ def refresh_login_states(conn: sqlite3.Connection, request_id: str = "") -> Dict
 def archive_summary(row: sqlite3.Row, conn: sqlite3.Connection) -> Dict[str, Any]:
     archive_id = row["id"]
     feedback_rows = conn.execute(
-        "SELECT platform, account, views, likes, saves, comments, source FROM feedback WHERE archive_id = ? ORDER BY platform",
+        "SELECT platform, account, views, likes, saves, comments, shares, source FROM feedback WHERE archive_id = ? ORDER BY platform",
         (archive_id,),
     ).fetchall()
     assets_rows = conn.execute(
@@ -2192,7 +2306,7 @@ def archive_summary(row: sqlite3.Row, conn: sqlite3.Connection) -> Dict[str, Any
     ).fetchall()
     history_rows = conn.execute(
         """
-        SELECT platform, views, likes, saves, comments, captured_at, source
+        SELECT platform, views, likes, saves, comments, shares, captured_at, source
         FROM metric_history
         WHERE archive_id = ?
         ORDER BY captured_at DESC, created_at DESC
@@ -2200,7 +2314,18 @@ def archive_summary(row: sqlite3.Row, conn: sqlite3.Connection) -> Dict[str, Any
         """,
         (archive_id,),
     ).fetchall()
-    feedback = {r["platform"]: {"account": r["account"] or "", "views": r["views"], "likes": r["likes"], "saves": r["saves"], "comments": r["comments"], "source": r["source"]} for r in feedback_rows}
+    feedback = {
+        r["platform"]: {
+            "account": r["account"] or "",
+            "views": r["views"],
+            "likes": r["likes"],
+            "saves": r["saves"],
+            "comments": r["comments"],
+            "shares": r["shares"],
+            "source": r["source"],
+        }
+        for r in feedback_rows
+    }
     cover = next((r["title"] for r in assets_rows if r["kind"] == "cover" and not r["deleted"]), "")
     images = [r["title"] for r in assets_rows if r["kind"] == "image" and not r["deleted"]]
     published = safe_json_loads(row["published_snapshot_json"] or "{}", {})
@@ -2262,6 +2387,7 @@ def archive_summary(row: sqlite3.Row, conn: sqlite3.Connection) -> Dict[str, Any
                 "likes": item["likes"],
                 "saves": item["saves"],
                 "comments": item["comments"],
+                "shares": item["shares"],
                 "captured_at": item["captured_at"],
                 "source": item["source"],
             }
@@ -2270,6 +2396,203 @@ def archive_summary(row: sqlite3.Row, conn: sqlite3.Connection) -> Dict[str, Any
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def note_analysis_payload(row: sqlite3.Row, conn: sqlite3.Connection) -> Dict[str, Any]:
+    summary = archive_summary(row, conn)
+    published = summary.get("published") if isinstance(summary.get("published"), dict) else {}
+    comments = []
+    for item in published.get("comments_data", [])[:20]:
+        if not isinstance(item, dict):
+            continue
+        comments.append({
+            "content": str(item.get("content") or item.get("text") or ""),
+            "like_count": optional_metric_int(item.get("like_count") or item.get("likes")),
+            "time_text": str(item.get("create_time_text") or item.get("create_time") or ""),
+        })
+    topics = conn.execute(
+        """
+        SELECT topic, confidence
+        FROM content_topics
+        WHERE archive_id = ? AND confirmed = 1
+        ORDER BY confidence DESC, topic COLLATE NOCASE
+        LIMIT 10
+        """,
+        (row["id"],),
+    ).fetchall()
+    return {
+        "archive_id": row["id"],
+        "platform": next(iter(summary.get("feedback") or {}), ""),
+        "title": summary.get("published_title") or summary.get("topic") or "",
+        "description": str(summary.get("published_description") or summary.get("note") or "")[:4000],
+        "author": summary.get("account_name") or str(published.get("author") or ""),
+        "published_at": str(published.get("published_at") or ""),
+        "published_url": stable_public_url(summary.get("published_url") or "", next(iter(summary.get("feedback") or {}), "")),
+        "metrics": {
+            platform: {
+                key: values.get(key)
+                for key in ANALYTICS_METRIC_FIELDS
+            }
+            for platform, values in (summary.get("feedback") or {}).items()
+        },
+        "metric_history": summary.get("metric_history", [])[:30],
+        "comments_sample": comments,
+        "confirmed_topics": [topic["topic"] for topic in topics],
+        "allowed_archive_ids": [row["id"]],
+    }
+
+
+def account_analysis_payload(account_id: str, conn: sqlite3.Connection) -> Dict[str, Any]:
+    account = get_account_or_404(conn, account_id)
+    metric_items = account_metric_rows(conn, account_id=account_id, limit=1)
+    archive_rows = conn.execute(
+        """
+        SELECT DISTINCT a.*
+        FROM archives a
+        JOIN feedback f ON f.archive_id = a.id
+        WHERE f.platform = ? AND f.account = ?
+        ORDER BY a.archive_date DESC, a.id DESC
+        LIMIT 50
+        """,
+        (account["platform"], account["account_name"]),
+    ).fetchall()
+    notes = []
+    allowed_ids: List[str] = []
+    for row in archive_rows:
+        summary = archive_summary(row, conn)
+        allowed_ids.append(row["id"])
+        notes.append({
+            "archive_id": row["id"],
+            "title": summary.get("published_title") or summary.get("topic") or "",
+            "description": str(summary.get("published_description") or summary.get("note") or "")[:1200],
+            "published_at": str((summary.get("published") or {}).get("published_at") or ""),
+            "metrics": summary.get("feedback") or {},
+            "metric_history": summary.get("metric_history", [])[:10],
+        })
+    return {
+        "account_id": account_id,
+        "platform": account["platform"],
+        "account_name": account["account_name"],
+        "metrics": metric_items[0] if metric_items else {},
+        "notes": notes,
+        "allowed_archive_ids": allowed_ids,
+    }
+
+
+def topic_analysis_payload(topic: str, conn: sqlite3.Connection) -> Dict[str, Any]:
+    normalized = normalize_topic(topic)
+    if not normalized:
+        raise ValueError("topic is required")
+    rows = conn.execute(
+        """
+        SELECT a.*, f.platform, f.account, f.views, f.likes, f.saves, f.comments, f.shares
+        FROM content_topics ct
+        JOIN archives a ON a.id = ct.archive_id
+        LEFT JOIN feedback f ON f.archive_id = a.id
+        WHERE ct.normalized_topic = ? AND ct.confirmed = 1
+        ORDER BY a.archive_date DESC, a.id DESC
+        LIMIT 100
+        """,
+        (normalized,),
+    ).fetchall()
+    notes: List[Dict[str, Any]] = []
+    allowed_ids: List[str] = []
+    for row in rows:
+        allowed_ids.append(row["id"])
+        notes.append({
+            "archive_id": row["id"],
+            "title": row["topic"],
+            "platform": row["platform"],
+            "account": row["account"],
+            "published_date": row["archive_date"],
+            "metrics": {key: row[key] for key in ANALYTICS_METRIC_FIELDS},
+        })
+    return {
+        "topic": topic,
+        "normalized_topic": normalized,
+        "notes": notes,
+        "allowed_archive_ids": allowed_ids,
+    }
+
+
+def queue_note_analysis(conn: sqlite3.Connection, archive_id: str, *, force: bool = False) -> Dict[str, Any]:
+    config = load_ai_config()
+    if not force and not config.configured:
+        return {"queued": False, "reason": "AI_NOT_CONFIGURED", "job_id": ""}
+    row = get_archive_or_404(conn, archive_id)
+    return enqueue_ai_job(
+        conn,
+        kind="note_virality",
+        scope_type="archive",
+        scope_id=archive_id,
+        payload=note_analysis_payload(row, conn),
+        config=config,
+    )
+
+
+def queue_account_analysis(conn: sqlite3.Connection, account_id: str, *, force: bool = False) -> Dict[str, Any]:
+    config = load_ai_config()
+    if not force and not config.configured:
+        return {"queued": False, "reason": "AI_NOT_CONFIGURED", "job_id": ""}
+    return enqueue_ai_job(
+        conn,
+        kind="account_strategy",
+        scope_type="account",
+        scope_id=account_id,
+        payload=account_analysis_payload(account_id, conn),
+        config=config,
+    )
+
+
+def queue_account_analyses_for_items(
+    conn: sqlite3.Connection,
+    items: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    seen: set[Tuple[str, str]] = set()
+    for item in items:
+        feedback = item.get("feedback") if isinstance(item.get("feedback"), dict) else {}
+        platform = str(item.get("platform") or next(iter(feedback), "")).strip()
+        account_name = str(item.get("account_name") or "").strip()
+        key = (platform, account_name)
+        if not platform or not account_name or key in seen:
+            continue
+        seen.add(key)
+        row = conn.execute(
+            "SELECT id FROM accounts WHERE platform = ? AND account_name = ? LIMIT 1",
+            (platform, account_name),
+        ).fetchone()
+        if not row:
+            account_id = create_account(
+                conn,
+                {
+                    "platform": platform,
+                    "account_name": account_name,
+                    "enabled": True,
+                },
+                commit=False,
+            )
+        else:
+            account_id = row["id"]
+        results.append(queue_account_analysis(conn, account_id))
+    return results
+
+
+def queue_topic_analysis(conn: sqlite3.Connection, topic: str, *, force: bool = False) -> Dict[str, Any]:
+    config = load_ai_config()
+    payload = topic_analysis_payload(topic, conn)
+    if len(payload["allowed_archive_ids"]) < 2:
+        return {"queued": False, "reason": "TOPIC_SAMPLE_TOO_SMALL", "job_id": "", "sample_size": len(payload["allowed_archive_ids"])}
+    if not force and not config.configured:
+        return {"queued": False, "reason": "AI_NOT_CONFIGURED", "job_id": "", "sample_size": len(payload["allowed_archive_ids"])}
+    return enqueue_ai_job(
+        conn,
+        kind="topic_competition",
+        scope_type="topic",
+        scope_id=payload["normalized_topic"],
+        payload=payload,
+        config=config,
+    )
 
 
 def get_archive_or_404(conn: sqlite3.Connection, archive_id: str) -> sqlite3.Row:
@@ -2355,6 +2678,7 @@ def upsert_feedback(
     likes = optional_metric_int(metrics.get("likes"))
     saves = optional_metric_int(metrics.get("saves"))
     comments = optional_metric_int(metrics.get("comments"))
+    shares = optional_metric_int(metrics.get("shares"))
     existing = conn.execute(
         "SELECT id FROM feedback WHERE archive_id = ? AND platform = ?",
         (archive_id, platform),
@@ -2363,18 +2687,20 @@ def upsert_feedback(
         conn.execute(
             """
             UPDATE feedback
-            SET account = ?, views = ?, likes = ?, saves = ?, comments = ?, source = ?, updated_at = ?
+            SET account = ?, views = ?, likes = ?, saves = ?, comments = ?, shares = ?, source = ?, updated_at = ?
             WHERE archive_id = ? AND platform = ?
             """,
-            (account, views, likes, saves, comments, source, ts, archive_id, platform),
+            (account, views, likes, saves, comments, shares, source, ts, archive_id, platform),
         )
     else:
         conn.execute(
             """
-            INSERT INTO feedback(id, archive_id, platform, account, views, likes, saves, comments, source, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO feedback(
+                id, archive_id, platform, account, views, likes, saves, comments, shares, source, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (f"fb_{uuid.uuid4().hex[:12]}", archive_id, platform, account, views, likes, saves, comments, source, ts, ts),
+            (f"fb_{uuid.uuid4().hex[:12]}", archive_id, platform, account, views, likes, saves, comments, shares, source, ts, ts),
         )
     conn.execute("UPDATE archives SET updated_at = ? WHERE id = ?", (ts, archive_id))
     if commit:
@@ -2446,6 +2772,296 @@ def get_account_or_404(conn: sqlite3.Connection, account_id: str) -> sqlite3.Row
 def list_account_rows(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     rows = conn.execute("SELECT * FROM accounts ORDER BY updated_at DESC, created_at DESC").fetchall()
     return [account_summary(row, conn) for row in rows]
+
+
+def normalized_topic(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip().casefold())
+
+
+def analytics_filter_clause(
+    platform: str = "",
+    account_id: str = "",
+    alias: str = "f",
+    topic: str = "",
+) -> Tuple[str, List[Any]]:
+    clauses = ["1=1"]
+    params: List[Any] = []
+    if platform:
+        clauses.append(f"{alias}.platform = ?")
+        params.append(platform)
+    if account_id:
+        clauses.append("a.id = ?")
+        params.append(account_id)
+    if topic:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM content_topics ct "
+            f"WHERE ct.archive_id = {alias}.archive_id AND ct.normalized_topic = ? AND ct.confirmed = 1)"
+        )
+        params.append(normalized_topic(topic))
+    return " AND ".join(clauses), params
+
+
+def metric_coverage(row: sqlite3.Row, notes_count: int) -> Dict[str, Dict[str, Optional[int]]]:
+    return {
+        field: {
+            "value": row[f"sum_{field}"],
+            "notes_with_value": row[f"count_{field}"],
+            "notes_total": notes_count,
+        }
+        for field in ANALYTICS_METRIC_FIELDS
+    }
+
+
+def metric_totals(row: sqlite3.Row, notes_count: int) -> Dict[str, Any]:
+    if notes_count == 0:
+        return {
+            "notes_count": 0,
+            "views": None,
+            "likes": None,
+            "saves": None,
+            "comments": None,
+            "shares": None,
+            "engagement": None,
+            "metric_coverage": {
+                field: {"value": None, "notes_with_value": 0, "notes_total": 0}
+                for field in ANALYTICS_METRIC_FIELDS
+            },
+        }
+    coverage = metric_coverage(row, notes_count)
+    known_engagement = [
+        coverage[field]["value"]
+        for field in ENGAGEMENT_METRIC_FIELDS
+        if coverage[field]["value"] is not None
+    ]
+    return {
+        "notes_count": notes_count,
+        "views": coverage["views"]["value"],
+        "likes": coverage["likes"]["value"],
+        "saves": coverage["saves"]["value"],
+        "comments": coverage["comments"]["value"],
+        "shares": coverage["shares"]["value"],
+        "engagement": sum(known_engagement) if known_engagement else None,
+        "metric_coverage": coverage,
+    }
+
+
+def account_metric_rows(
+    conn: sqlite3.Connection,
+    *,
+    platform: str = "",
+    account_id: str = "",
+    topic: str = "",
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    where, params = analytics_filter_clause(platform, account_id, topic=topic)
+    limit_sql = ""
+    if limit is not None:
+        limit_sql = " LIMIT ?"
+        params = [*params, max(1, int(limit))]
+    aggregate_fields = ",\n".join(
+        f"SUM(f.{field}) AS sum_{field}, COUNT(f.{field}) AS count_{field}"
+        for field in ANALYTICS_METRIC_FIELDS
+    )
+    rows = conn.execute(
+        f"""
+        SELECT a.*, COUNT(DISTINCT f.archive_id) AS notes_count, {aggregate_fields}
+        FROM accounts a
+        LEFT JOIN feedback f ON f.platform = a.platform AND f.account = a.account_name
+        WHERE {where}
+        GROUP BY a.id
+        ORDER BY notes_count DESC, a.account_name COLLATE NOCASE
+        {limit_sql}
+        """,
+        params,
+    ).fetchall()
+    items: List[Dict[str, Any]] = []
+    for row in rows:
+        notes_count = int(row["notes_count"] or 0)
+        items.append({
+            "account_id": row["id"],
+            "platform": row["platform"],
+            "account_name": row["account_name"],
+            "profile_url": stable_account_profile_url(row["profile_url"]),
+            "enabled": bool(row["enabled"]),
+            "last_sync_at": row["last_sync_at"],
+            "last_sync_status": row["last_sync_status"],
+            **metric_totals(row, notes_count),
+        })
+    return items
+
+
+def analytics_scope_summary(
+    conn: sqlite3.Connection,
+    *,
+    platform: str = "",
+    account_id: str = "",
+    topic: str = "",
+) -> Dict[str, Any]:
+    where, params = analytics_filter_clause(platform, account_id, topic=topic)
+    aggregate_fields = ",\n".join(
+        f"SUM(f.{field}) AS sum_{field}, COUNT(f.{field}) AS count_{field}"
+        for field in ANALYTICS_METRIC_FIELDS
+    )
+    row = conn.execute(
+        f"""
+        SELECT COUNT(DISTINCT f.archive_id) AS notes_count,
+               COUNT(DISTINCT a.id) AS monitored_accounts,
+               {aggregate_fields}
+        FROM feedback f
+        LEFT JOIN accounts a ON a.platform = f.platform AND a.account_name = f.account
+        WHERE {where}
+        """,
+        params,
+    ).fetchone()
+    notes_count = int((row["notes_count"] if row else 0) or 0)
+    return {
+        **metric_totals(row, notes_count),
+        "monitored_accounts": int((row["monitored_accounts"] if row else 0) or 0),
+    }
+
+
+def analytics_trend(
+    conn: sqlite3.Connection,
+    *,
+    days: int = 14,
+    platform: str = "",
+    account_id: str = "",
+    topic: str = "",
+) -> List[Dict[str, Any]]:
+    days = min(max(int(days or 14), 1), 90)
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=days - 1)
+    where, params = analytics_filter_clause(platform, account_id, topic=topic)
+    rows = conn.execute(
+        f"""
+        SELECT ar.archive_date AS day,
+               COUNT(DISTINCT ar.id) AS new_notes,
+               SUM(COALESCE(f.likes, 0) + COALESCE(f.saves, 0) + COALESCE(f.comments, 0) + COALESCE(f.shares, 0)) AS engagement
+        FROM archives ar
+        JOIN feedback f ON f.archive_id = ar.id
+        LEFT JOIN accounts a ON a.platform = f.platform AND a.account_name = f.account
+        WHERE ar.archive_date >= ? AND ar.archive_date <= ? AND {where}
+        GROUP BY ar.archive_date
+        """,
+        [start_date.isoformat(), end_date.isoformat(), *params],
+    ).fetchall()
+    by_day = {
+        row["day"]: {
+            "date": row["day"],
+            "new_notes": int(row["new_notes"] or 0),
+            "current_engagement": int(row["engagement"] or 0),
+        }
+        for row in rows
+    }
+    result: List[Dict[str, Any]] = []
+    cursor = start_date
+    while cursor <= end_date:
+        key = cursor.isoformat()
+        result.append(by_day.get(key, {"date": key, "new_notes": 0, "current_engagement": 0}))
+        cursor += timedelta(days=1)
+    return result
+
+
+def high_growth_items(
+    conn: sqlite3.Connection,
+    *,
+    days: int = 14,
+    platform: str = "",
+    account_id: str = "",
+    topic: str = "",
+    limit: int = 10,
+) -> List[Dict[str, Any]]:
+    days = min(max(int(days or 14), 1), 90)
+    limit = min(max(int(limit or 10), 1), 50)
+    start_at = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    where, params = analytics_filter_clause(platform, account_id, alias="mh", topic=topic)
+    rows = conn.execute(
+        f"""
+        WITH ranked AS (
+            SELECT mh.*,
+                   COUNT(*) OVER (PARTITION BY mh.archive_id, mh.platform) AS sample_count,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY mh.archive_id, mh.platform
+                       ORDER BY mh.captured_at ASC, mh.created_at ASC
+                   ) AS first_rank,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY mh.archive_id, mh.platform
+                       ORDER BY mh.captured_at DESC, mh.created_at DESC
+                   ) AS last_rank
+            FROM metric_history mh
+            JOIN archives ar ON ar.id = mh.archive_id
+            LEFT JOIN accounts a ON a.platform = mh.platform AND a.account_name = (
+                SELECT f.account FROM feedback f
+                WHERE f.archive_id = mh.archive_id AND f.platform = mh.platform
+                LIMIT 1
+            )
+            WHERE mh.captured_at >= ? AND {where}
+        )
+        SELECT ar.id AS archive_id, ar.topic, ar.published_url,
+               f.account, f.platform, f.views, f.likes, f.saves, f.comments, f.shares,
+               first.captured_at AS first_captured_at,
+               last.captured_at AS last_captured_at,
+               first.likes AS first_likes, last.likes AS last_likes,
+               first.saves AS first_saves, last.saves AS last_saves,
+               first.comments AS first_comments, last.comments AS last_comments,
+               first.shares AS first_shares, last.shares AS last_shares
+        FROM ranked first
+        JOIN ranked last ON last.archive_id = first.archive_id
+            AND last.platform = first.platform AND last.last_rank = 1
+        JOIN archives ar ON ar.id = first.archive_id
+        LEFT JOIN feedback f ON f.archive_id = first.archive_id AND f.platform = first.platform
+        WHERE first.first_rank = 1
+          AND first.sample_count >= 2
+          AND (
+              (first.likes IS NOT NULL AND last.likes IS NOT NULL) OR
+              (first.saves IS NOT NULL AND last.saves IS NOT NULL) OR
+              (first.comments IS NOT NULL AND last.comments IS NOT NULL) OR
+              (first.shares IS NOT NULL AND last.shares IS NOT NULL)
+          )
+        ORDER BY (
+            COALESCE(last.likes, first.likes, 0) - COALESCE(first.likes, 0) +
+            COALESCE(last.saves, first.saves, 0) - COALESCE(first.saves, 0) +
+            COALESCE(last.comments, first.comments, 0) - COALESCE(first.comments, 0) +
+            COALESCE(last.shares, first.shares, 0) - COALESCE(first.shares, 0)
+        ) DESC
+        LIMIT ?
+        """,
+        [start_at, *params, limit],
+    ).fetchall()
+    items: List[Dict[str, Any]] = []
+    for row in rows:
+        first_known = [
+            value for value in (row["first_likes"], row["first_saves"], row["first_comments"], row["first_shares"])
+            if value is not None
+        ]
+        last_known = [
+            value for value in (row["last_likes"], row["last_saves"], row["last_comments"], row["last_shares"])
+            if value is not None
+        ]
+        first_engagement = sum(first_known) if first_known else None
+        last_engagement = sum(last_known) if last_known else None
+        delta = last_engagement - first_engagement if first_engagement is not None and last_engagement is not None else None
+        items.append({
+            "archive_id": row["archive_id"],
+            "title": row["topic"],
+            "published_url": stable_public_url(row["published_url"] or "", row["platform"] or ""),
+            "platform": row["platform"],
+            "account": row["account"] or "",
+            "first_captured_at": row["first_captured_at"],
+            "last_captured_at": row["last_captured_at"],
+            "first_engagement": first_engagement,
+            "last_engagement": last_engagement,
+            "engagement_delta": delta,
+            "engagement_growth_rate": (delta / first_engagement) if delta is not None and first_engagement else None,
+            "current": {
+                "views": row["views"],
+                "likes": row["likes"],
+                "saves": row["saves"],
+                "comments": row["comments"],
+                "shares": row["shares"],
+            },
+        })
+    return items
 
 
 def create_account(
@@ -2592,6 +3208,9 @@ def normalize_sync_post(post: Dict[str, Any], account: sqlite3.Row) -> Dict[str,
         metrics = {}
     else:
         metrics = dict(metrics)
+    extra_metrics = snapshot.get("extra_metrics") if isinstance(snapshot.get("extra_metrics"), dict) else {}
+    if metrics.get("shares") is None and extra_metrics.get("shares") is not None:
+        metrics["shares"] = extra_metrics.get("shares")
     metrics.setdefault("account", account_name)
     collection_mode = (post.get("collection_mode") or snapshot.get("collection_mode") or connector_sync_policy(platform)["sync_scope"]).strip()
     if not collection_mode:
@@ -2721,6 +3340,16 @@ def upsert_archive_from_sync_post(
         source=normalized["source"],
         commit=False,
     )
+    record_metric_snapshot(
+        conn,
+        archive_id,
+        normalized["platform"],
+        normalized["metrics"],
+        str((normalized["snapshot"] or {}).get("captured_at") or now_iso()),
+        normalized["source"],
+    )
+    if action == "created":
+        queue_note_analysis(conn, archive_id)
     row = get_archive_or_404(conn, archive_id)
     return {
         "action": action,
@@ -2884,7 +3513,15 @@ def import_search_results(
             if snapshot.get("status") != "fetched":
                 raise ValueError(snapshot.get("error") or "真实搜索结果详情抓取失败")
             snapshot = attach_real_comments(snapshot, candidate_url, request_id=request_id)
-            archive_id = save_note_snapshot(conn, candidate_url, snapshot, favorite=False, source="keyword_search")
+            archive_id, created = save_note_snapshot_with_status(
+                conn,
+                candidate_url,
+                snapshot,
+                favorite=False,
+                source="keyword_search",
+            )
+            if created:
+                queue_note_analysis(conn, archive_id)
             row = get_archive_or_404(conn, archive_id)
             items.append(archive_summary(row, conn))
         except Exception as exc:
@@ -3060,7 +3697,15 @@ def import_account_results(
                 "account_name": first_text_value(snapshot.get("author"), candidate.get("author")),
                 "account_profile_url": account_profile_url,
             }
-            archive_id = save_note_snapshot(conn, capture_url, snapshot, favorite=False, source="account_import")
+            archive_id, created = save_note_snapshot_with_status(
+                conn,
+                capture_url,
+                snapshot,
+                favorite=False,
+                source="account_import",
+            )
+            if created:
+                queue_note_analysis(conn, archive_id)
             row = get_archive_or_404(conn, archive_id)
             items.append(archive_summary(row, conn))
         except Exception as exc:
@@ -3109,12 +3754,14 @@ def api_account_import_notes():
             items, failures, progress = import_account_results(
                 conn, platform, profile_url, limit, request_id=request_id
             )
+            account_ai_jobs = queue_account_analyses_for_items(conn, items)
             conn.commit()
             return jsonify({
                 "items": items,
                 "failures": failures,
                 "platform": platform,
                 "limit": limit,
+                "ai_jobs": account_ai_jobs,
                 **progress,
             })
         except Exception as exc:
@@ -3141,8 +3788,16 @@ def api_search_import_notes():
     with connect_db() as conn:
         try:
             items, failures = import_search_results(conn, platform, keyword, limit, request_id=request_id)
+            account_ai_jobs = queue_account_analyses_for_items(conn, items)
             conn.commit()
-            return jsonify({"items": items, "failures": failures, "platform": platform, "keyword": keyword, "limit": limit})
+            return jsonify({
+                "items": items,
+                "failures": failures,
+                "platform": platform,
+                "keyword": keyword,
+                "limit": limit,
+                "ai_jobs": account_ai_jobs,
+            })
         except Exception as exc:
             conn.rollback()
             message = redact_temporary_access_text(exc)
@@ -3166,6 +3821,319 @@ def get_connectors():
 def list_accounts():
     with connect_db() as conn:
         return jsonify({"accounts": list_account_rows(conn)})
+
+
+@app.get("/api/accounts/metrics")
+def list_account_metrics():
+    platform = (request.args.get("platform") or "").strip()
+    account_id = (request.args.get("account_id") or "").strip()
+    try:
+        limit = min(max(int(request.args.get("limit") or 200), 1), 500)
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit 必须是整数"}), 400
+    with connect_db() as conn:
+        items = account_metric_rows(conn, platform=platform, account_id=account_id, limit=limit)
+    return jsonify({"items": items, "filters": {"platform": platform, "account_id": account_id}})
+
+
+@app.get("/api/accounts/<account_id>/metrics")
+def get_account_metrics(account_id: str):
+    try:
+        days = min(max(int(request.args.get("days") or 14), 1), 90)
+    except (TypeError, ValueError):
+        return jsonify({"error": "days 必须是整数"}), 400
+    with connect_db() as conn:
+        row = get_account_or_404(conn, account_id)
+        metric_items = account_metric_rows(conn, account_id=account_id, limit=1)
+        metrics = metric_items[0] if metric_items else None
+        return jsonify({
+            "account": account_summary(row, conn),
+            "metrics": metrics,
+            "trend": analytics_trend(conn, days=days, account_id=account_id),
+        })
+
+
+@app.get("/api/dashboard/high-growth")
+def get_dashboard_high_growth():
+    try:
+        days = min(max(int(request.args.get("days") or 14), 1), 90)
+        limit = min(max(int(request.args.get("limit") or 10), 1), 50)
+    except (TypeError, ValueError):
+        return jsonify({"error": "days 和 limit 必须是整数"}), 400
+    platform = (request.args.get("platform") or "").strip()
+    account_id = (request.args.get("account_id") or "").strip()
+    topic = (request.args.get("topic") or "").strip()
+    with connect_db() as conn:
+        items = high_growth_items(
+            conn,
+            days=days,
+            platform=platform,
+            account_id=account_id,
+            topic=topic,
+            limit=limit,
+        )
+    return jsonify({"items": items, "filters": {"days": days, "platform": platform, "account_id": account_id, "topic": topic}})
+
+
+@app.get("/api/dashboard/overview")
+def get_dashboard_overview():
+    try:
+        days = min(max(int(request.args.get("days") or 14), 1), 90)
+    except (TypeError, ValueError):
+        return jsonify({"error": "days 必须是整数"}), 400
+    platform = (request.args.get("platform") or "").strip()
+    account_id = (request.args.get("account_id") or "").strip()
+    topic = (request.args.get("topic") or "").strip()
+    with connect_db() as conn:
+        if account_id:
+            get_account_or_404(conn, account_id)
+        summary = analytics_scope_summary(conn, platform=platform, account_id=account_id, topic=topic)
+        trend = analytics_trend(conn, days=days, platform=platform, account_id=account_id, topic=topic)
+        high_growth = high_growth_items(
+            conn,
+            days=days,
+            platform=platform,
+            account_id=account_id,
+            topic=topic,
+            limit=10,
+        )
+        accounts = account_metric_rows(
+            conn,
+            platform=platform,
+            account_id=account_id,
+            topic=topic,
+            limit=10,
+        )
+        where, params = analytics_filter_clause(platform, account_id, topic=topic)
+        platform_rows = conn.execute(
+            f"""
+            SELECT f.platform, COUNT(DISTINCT f.archive_id) AS notes_count,
+                   SUM(COALESCE(f.likes, 0) + COALESCE(f.saves, 0) + COALESCE(f.comments, 0) + COALESCE(f.shares, 0)) AS engagement
+            FROM feedback f
+            LEFT JOIN accounts a ON a.platform = f.platform AND a.account_name = f.account
+            WHERE {where}
+            GROUP BY f.platform
+            ORDER BY engagement DESC
+            """,
+            params,
+        ).fetchall()
+        topic_rows = conn.execute(
+            """
+            SELECT ct.topic, ct.normalized_topic, COUNT(DISTINCT ct.archive_id) AS notes_count
+            FROM content_topics ct
+            WHERE ct.confirmed = 1
+            GROUP BY ct.normalized_topic
+            ORDER BY notes_count DESC, ct.topic COLLATE NOCASE
+            LIMIT 100
+            """
+        ).fetchall()
+        confirmed_topics = [dict(row) for row in topic_rows]
+        platform_distribution = [
+            {
+                "platform": row["platform"],
+                "notes_count": int(row["notes_count"] or 0),
+                "engagement": int(row["engagement"] or 0),
+            }
+            for row in platform_rows
+        ]
+    return jsonify({
+        "filters": {"days": days, "platform": platform, "account_id": account_id, "topic": topic},
+        "kpi": {
+            **summary,
+            "recent_new_notes": sum(item["new_notes"] for item in trend),
+            "recent_current_engagement": sum(item["current_engagement"] for item in trend),
+        },
+        "trend": trend,
+        "high_growth": high_growth,
+        "accounts": accounts,
+        "platform_distribution": platform_distribution,
+        "topics": confirmed_topics,
+    })
+
+
+@app.get("/api/ai/status")
+def api_ai_status():
+    with connect_db() as conn:
+        queued = conn.execute("SELECT COUNT(*) AS c FROM ai_jobs WHERE status IN ('queued', 'running')").fetchone()["c"]
+        recent = conn.execute(
+            "SELECT status, COUNT(*) AS c FROM ai_jobs WHERE queued_at >= ? GROUP BY status",
+            ((datetime.now() - timedelta(days=1)).isoformat(timespec="seconds"),),
+        ).fetchall()
+    status = load_ai_config().public_status()
+    status["queued_jobs"] = int(queued or 0)
+    status["last_24h"] = {row["status"]: int(row["c"] or 0) for row in recent}
+    return jsonify(status)
+
+
+def ai_insight_payload(row: sqlite3.Row) -> Dict[str, Any]:
+    return {
+        "id": row["id"],
+        "job_id": row["job_id"],
+        "kind": row["kind"],
+        "scope_type": row["scope_type"],
+        "scope_id": row["scope_id"],
+        "result": safe_json_loads(row["result_json"] or "{}", {}),
+        "evidence": safe_json_loads(row["evidence_json"] or "[]", []),
+        "provider": row["provider"],
+        "model": row["model"],
+        "prompt_version": row["prompt_version"],
+        "generated_at": row["generated_at"],
+    }
+
+
+def latest_insight(conn: sqlite3.Connection, kind: str, scope_type: str, scope_id: str) -> Optional[Dict[str, Any]]:
+    row = conn.execute(
+        """
+        SELECT * FROM ai_insights
+        WHERE kind = ? AND scope_type = ? AND scope_id = ?
+        ORDER BY generated_at DESC LIMIT 1
+        """,
+        (kind, scope_type, scope_id),
+    ).fetchone()
+    return ai_insight_payload(row) if row else None
+
+
+@app.get("/api/ai/jobs/<job_id>")
+def api_ai_job(job_id: str):
+    with connect_db() as conn:
+        row = conn.execute("SELECT * FROM ai_jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            insight = conn.execute("SELECT * FROM ai_insights WHERE id = ?", (job_id,)).fetchone()
+            if insight:
+                return jsonify({"ok": True, "status": "success", "insight": ai_insight_payload(insight)})
+            return jsonify({"error": "AI job not found"}), 404
+        insight = conn.execute("SELECT * FROM ai_insights WHERE job_id = ?", (row["id"],)).fetchone()
+        return jsonify({
+            "ok": row["status"] != "failed",
+            "job": {
+                "id": row["id"],
+                "kind": row["kind"],
+                "scope_type": row["scope_type"],
+                "scope_id": row["scope_id"],
+                "status": row["status"],
+                "attempts": row["attempts"],
+                "provider": row["provider"],
+                "model": row["model"],
+                "queued_at": row["queued_at"],
+                "started_at": row["started_at"],
+                "finished_at": row["finished_at"],
+                "error": row["error"],
+            },
+            "insight": ai_insight_payload(insight) if insight else None,
+        })
+
+
+@app.post("/api/archives/<archive_id>/insight")
+def api_queue_archive_insight(archive_id: str):
+    with connect_db() as conn:
+        result = queue_note_analysis(conn, archive_id, force=True)
+        conn.commit()
+    return jsonify(result), 202 if result.get("queued") else 200
+
+
+@app.get("/api/archives/<archive_id>/insight")
+def api_archive_insight(archive_id: str):
+    with connect_db() as conn:
+        get_archive_or_404(conn, archive_id)
+        insight = latest_insight(conn, "note_virality", "archive", archive_id)
+    return jsonify({"insight": insight})
+
+
+@app.post("/api/accounts/<account_id>/insight")
+def api_queue_account_insight(account_id: str):
+    with connect_db() as conn:
+        get_account_or_404(conn, account_id)
+        result = queue_account_analysis(conn, account_id, force=True)
+        conn.commit()
+    return jsonify(result), 202 if result.get("queued") else 200
+
+
+@app.get("/api/accounts/<account_id>/insight")
+def api_account_insight(account_id: str):
+    with connect_db() as conn:
+        get_account_or_404(conn, account_id)
+        insight = latest_insight(conn, "account_strategy", "account", account_id)
+    return jsonify({"insight": insight})
+
+
+@app.get("/api/archives/<archive_id>/topics")
+def api_archive_topics(archive_id: str):
+    with connect_db() as conn:
+        get_archive_or_404(conn, archive_id)
+        rows = conn.execute(
+            """
+            SELECT * FROM content_topics
+            WHERE archive_id = ?
+            ORDER BY confirmed DESC, confidence DESC, topic COLLATE NOCASE
+            """,
+            (archive_id,),
+        ).fetchall()
+    return jsonify({"topics": [dict(row) for row in rows]})
+
+
+@app.patch("/api/content-topics/<topic_id>")
+def api_patch_content_topic(topic_id: str):
+    payload = request.get_json(force=True, silent=False) or {}
+    topic = str(payload.get("topic") or "").strip()
+    if payload.get("confirmed") is not None and not isinstance(payload.get("confirmed"), bool):
+        return jsonify({"error": "confirmed 必须是布尔值"}), 400
+    with connect_db() as conn:
+        row = conn.execute("SELECT * FROM content_topics WHERE id = ?", (topic_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "topic not found"}), 404
+        next_topic = topic or row["topic"]
+        next_normalized = normalize_topic(next_topic)
+        if not next_normalized:
+            return jsonify({"error": "topic 不能为空"}), 400
+        confirmed = bool(payload.get("confirmed", row["confirmed"]))
+        ts = now_iso()
+        try:
+            conn.execute(
+                """
+                UPDATE content_topics
+                SET topic = ?, normalized_topic = ?, source = 'manual', confirmed = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (next_topic, next_normalized, 1 if confirmed else 0, ts, topic_id),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            return jsonify({"error": "该笔记已经存在同名赛道标签"}), 409
+        result = {"ok": True}
+        if confirmed:
+            sample = conn.execute(
+                "SELECT COUNT(*) AS c FROM content_topics WHERE normalized_topic = ? AND confirmed = 1",
+                (next_normalized,),
+            ).fetchone()["c"]
+            result["topic_analysis"] = (
+                queue_topic_analysis(conn, next_topic)
+                if int(sample or 0) >= 2
+                else {
+                    "queued": False,
+                    "reason": "TOPIC_SAMPLE_TOO_SMALL",
+                    "job_id": "",
+                    "sample_size": int(sample or 0),
+                }
+            )
+        updated = conn.execute("SELECT * FROM content_topics WHERE id = ?", (topic_id,)).fetchone()
+        conn.commit()
+    return jsonify({**result, "topic": dict(updated)})
+
+
+@app.post("/api/topics/<path:topic>/insight")
+def api_queue_topic_insight(topic: str):
+    with connect_db() as conn:
+        result = queue_topic_analysis(conn, topic, force=True)
+        conn.commit()
+    return jsonify(result), 202 if result.get("queued") else 200
+
+
+@app.get("/api/topics/<path:topic>/insight")
+def api_topic_insight(topic: str):
+    with connect_db() as conn:
+        insight = latest_insight(conn, "topic_competition", "topic", normalize_topic(topic))
+    return jsonify({"insight": insight})
 
 
 @app.post("/api/accounts")
@@ -3428,14 +4396,24 @@ def api_import_notes():
                 if snapshot.get("status") != "fetched":
                     raise ValueError(snapshot.get("error") or "真实笔记抓取未成功")
                 snapshot = attach_real_comments(snapshot, url, request_id=request_id)
-                archive_id = save_note_snapshot(conn, url, snapshot, favorite=favorite, source="link_import")
+                archive_id, created = save_note_snapshot_with_status(
+                    conn,
+                    url,
+                    snapshot,
+                    favorite=favorite,
+                    source="link_import",
+                )
+                if created:
+                    queue_note_analysis(conn, archive_id)
                 conn.commit()
                 row = get_archive_or_404(conn, archive_id)
                 items.append(archive_summary(row, conn))
             except Exception as exc:
                 conn.rollback()
                 failures.append({"url": stable_public_url(url, detect_platform_from_url(url)), "error": redact_temporary_access_text(exc)})
-    return jsonify({"items": items, "failures": failures})
+        account_ai_jobs = queue_account_analyses_for_items(conn, items)
+        conn.commit()
+    return jsonify({"items": items, "failures": failures, "ai_jobs": account_ai_jobs})
 
 
 @app.post("/api/archives/<archive_id>/refresh")
@@ -3647,4 +4625,6 @@ def bad_request(err):
 if __name__ == "__main__":
     init_db()
     seed_accounts_from_feedback()
+    from ai_service import start_worker
+    start_worker(connect_db)
     app.run(host="127.0.0.1", port=int(os.getenv("PANEL_PORT", "5060")), debug=False)

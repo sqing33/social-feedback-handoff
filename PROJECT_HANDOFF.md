@@ -12,6 +12,9 @@
 2. 面板已增加【账号信息】视图；账号主页导入的成功笔记按“平台 → 具体账号 → 笔记”归类，并按发布时间从新到旧处理。
 3. 账号主页 URL 归档时去除查询参数；普通链接导入和关键词搜索不会仅凭作者名进入账号信息视图。
 4. 面板和 scraper 均由 LaunchAgent 管理，面板只向用户暴露 `5060`，`8007` 仅作为内部服务。
+5. 面板新增独立深色分析仪表盘，按平台、账号、赛道和日期统算笔记、浏览、点赞、收藏、评论、分享/转发，并展示 14 天趋势与高增长内容。
+6. 账号总量只统计每篇笔记的最新 `feedback`；指标历史只用于单篇增长分析，不参与账号总量重复累计。
+7. 新导入笔记进入 LiteLLM AI 分析队列；AI 标签默认是候选，只有用户确认后才进入稳定的赛道聚合。
 
 抖音某个真实主页曾完成登录校验，但当前页面未发现可解析作品；系统如实返回“未发现作品”，不会伪造导入成功，也不会误报为登录失效。
 
@@ -21,8 +24,9 @@
 Safari / 本机浏览器
   ↓
 Waitress + Flask 面板  http://127.0.0.1:5060
-  ├── 前端页面
-  ├── 业务 API
+  ├── 前端页面与 Sonar 风格分析仪表盘
+  ├── 业务 API、账号统算、14 天趋势
+  ├── LiteLLM AI 任务队列与洞察缓存
   └── SQLite: panel/social_feedback.db
           ↓ X-API-Key 请求头
 Uvicorn + FastAPI scraper  http://127.0.0.1:8007
@@ -53,6 +57,9 @@ Uvicorn + FastAPI scraper  http://127.0.0.1:8007
 - `ENABLE_BROWSER_ADMIN=0`
 - `ALLOW_LEGACY_WRITE_API=0`
 - `ALLOW_GENERIC_PUBLIC_CAPTURE=0`
+- `AI_ANALYSIS_ENABLED=1`
+- `LITELLM_MODEL=`、`LITELLM_API_KEY=`、`LITELLM_API_BASE=` 为空时，统计与仪表盘可用，AI 明确显示未配置且不会出站调用。
+- `LITELLM_TIMEOUT_SECONDS=90`、`LITELLM_MAX_PENDING_JOBS=50`。
 - scraper API Key 仅通过 `X-API-Key` 请求头传递，不接受 URL query 参数。
 
 正式 scraper 不注册旧 auth、business、proxy、reload 和 HTTP bridge 兼容路由。危险浏览器管理接口默认返回 403；只保留状态和人工登录所需接口。
@@ -69,6 +76,10 @@ Uvicorn + FastAPI scraper  http://127.0.0.1:8007
 8. 小红书公开浏览量缺失时保持 `NULL`；快手公开收藏量缺失时保持 `NULL`。
 9. 测试必须使用临时数据库和隔离 profile，不污染正式数据库。
 10. 浏览器单步操作不得超过 30 秒，不盲目高频重试。
+11. “高增长内容”至少需要同一作品两次真实指标采样；单次采样不得显示为增长。
+12. 当前没有权威风险分类数据，仪表盘使用“高增长内容”，不得把模型推测伪装成“高风险舆情”。
+13. AI 输入只能来自脱敏后的真实快照、公开指标、评论样本和已确认赛道；证据 archive_id 必须来自本次输入。
+14. AI 输出只写入 `ai_insights`，不得回写或污染 `archives`、`feedback`、`metric_history`。
 
 面板旧直写接口在正式模式下被阻止：
 
@@ -88,6 +99,7 @@ social-feedback-handoff-20260905/
 ├── panel/
 │   ├── social-feedback-panel.html
 │   ├── social_feedback_backend.py
+│   ├── ai_service.py
 │   └── wsgi.py
 ├── scraper-backend/
 │   ├── app/
@@ -104,7 +116,9 @@ social-feedback-handoff-20260905/
 │   ├── login-platform.sh
 │   ├── real_probe.py
 │   └── run-real-probes.sh
-└── tests/test_formal_mode.py
+└── tests/
+    ├── test_formal_mode.py
+    └── test_analytics_dashboard.py
 ```
 
 以下运行数据不会进入交付包：`.runtime/`、数据库、浏览器 profile、虚拟环境、日志、备份、缓存和秘密配置。
@@ -140,6 +154,23 @@ python3.11 -m venv .venv
 http://127.0.0.1:5060/
 ```
 
+### AI 配置
+
+编辑本机 `.runtime/formal.env` 中的配置，不要把密钥写入 Git：
+
+```text
+AI_ANALYSIS_ENABLED=1
+LITELLM_MODEL=provider/model-name
+LITELLM_API_KEY=本机密钥
+LITELLM_API_BASE=可选的兼容接口地址
+```
+
+LiteLLM 可接 MiniMax、DeepSeek、OpenAI 兼容服务或本地 Ollama。模型未配置时，账号统计、趋势和仪表盘仍可正常使用。配置完成后重启面板：
+
+```bash
+./scripts/restart-services.sh
+```
+
 前台临时运行也可以直接执行：
 
 ```bash
@@ -166,7 +197,7 @@ http://127.0.0.1:5060/
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-2026-09-07 最终结果：`.venv/bin/python -m unittest discover -s tests -v` 共 `26/26` 通过。包含账号主页导入来源、发布时间倒序、四平台请求节流、主页 URL 参数清理、正式模式安全边界和小红书导航回归。唯一提示是 Starlette 关于 `httpx` TestClient 的弃用 warning，不影响测试结果。
+2026-09-18 最终结果：`.venv/bin/python -m unittest discover -s tests -v` 共 `63/63` 通过。覆盖原有正式模式、账号主页、小红书导航与安全边界，并新增账号最新指标统算、NULL/0 区分、分享/转发、14 天趋势、双采样高增长、平台/账号/赛道筛选、LiteLLM 队列去重、AI 证据校验和未确认赛道隔离。唯一提示是 Starlette 关于 `httpx` TestClient 的弃用 warning，不影响测试结果。
 
 本机 live 验收结果：
 
@@ -219,7 +250,8 @@ export PROBE_KUAISHOU_URL='完整快手作品链接'
 
 ## 11. 关键文件
 
-- `panel/social_feedback_backend.py`：面板业务 API、SQLite、真实抓取写库边界。
+- `panel/social_feedback_backend.py`：面板业务 API、SQLite、真实抓取写库边界、账号统计和仪表盘接口。
+- `panel/ai_service.py`：LiteLLM 调用、AI 任务队列、证据校验和赛道候选写入。
 - `panel/wsgi.py`：Waitress WSGI 入口。
 - `scraper-backend/app/main.py`：正式路由注册与中间件。
 - `scraper-backend/app/middleware.py`：API Key 与 Request ID。

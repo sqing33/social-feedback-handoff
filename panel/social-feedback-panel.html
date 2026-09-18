@@ -402,12 +402,12 @@
     .meta-item { min-width: 0; }
     .meta-item span { display: block; color: var(--muted); font-size: 11px; }
     .meta-item strong { display: block; margin-top: 2px; overflow-wrap: anywhere; font-size: 12px; }
-    .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; margin-top: 10px; }
     .metric-box { padding: 9px; border: 1px solid var(--line); border-radius: 11px; background: var(--soft); }
     .metric-box span { color: var(--muted); font-size: 11px; }
     .metric-box strong { display: block; margin-top: 2px; font-size: 16px; }
     .history-list { display: grid; gap: 6px; }
-    .history-row { display: grid; grid-template-columns: minmax(112px, 1.35fr) repeat(4, minmax(58px, .8fr)); gap: 7px; align-items: center; padding: 8px 9px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfb; font-size: 11px; }
+    .history-row { display: grid; grid-template-columns: minmax(112px, 1.35fr) repeat(5, minmax(52px, .8fr)); gap: 7px; align-items: center; padding: 8px 9px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfb; font-size: 11px; }
     .history-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .history-row .history-time { color: var(--muted); }
     .detail-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -436,11 +436,98 @@
     }
     .empty strong { display: block; margin-bottom: 4px; color: var(--text); }
 
+    .sonar-dashboard {
+      --sonar-bg: #0b0d0c;
+      --sonar-panel: #101311;
+      --sonar-panel-soft: #151917;
+      --sonar-line: #2a302c;
+      --sonar-text: #eef1ef;
+      --sonar-muted: #8b948e;
+      --sonar-accent: #d8a15b;
+      --sonar-green: #87a98f;
+      display: block;
+      margin-bottom: 14px;
+      padding: 26px;
+      border-color: var(--sonar-line);
+      background:
+        radial-gradient(circle at 80% 0%, rgba(216, 161, 91, .08), transparent 34%),
+        var(--sonar-bg);
+      color: var(--sonar-text);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+    }
+    .sonar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+    .sonar-head .eyebrow { color: var(--sonar-muted); }
+    .sonar-head h2 { font-size: 27px; letter-spacing: -.025em; }
+    .sonar-head p { margin-top: 5px; color: var(--sonar-muted); }
+    .sonar-ai-state { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border: 1px solid var(--sonar-line); border-radius: 999px; color: var(--sonar-muted); font-size: 12px; }
+    .sonar-ai-state.ready { border-color: rgba(135, 169, 143, .45); color: var(--sonar-green); }
+    .sonar-ai-state.busy { border-color: rgba(216, 161, 91, .45); color: var(--sonar-accent); }
+    .sonar-filters { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)) auto; gap: 10px; margin-bottom: 16px; }
+    .sonar-field { display: grid; gap: 5px; color: var(--sonar-muted); font-size: 11px; }
+    .sonar-field select, .sonar-field input {
+      width: 100%; min-height: 40px; border: 1px solid var(--sonar-line); border-radius: 10px;
+      padding: 0 11px; outline: none; background: var(--sonar-panel); color: var(--sonar-text);
+    }
+    .sonar-field select:focus, .sonar-field input:focus { border-color: rgba(216, 161, 91, .7); }
+    .sonar-refresh { align-self: end; min-height: 40px; border: 1px solid var(--sonar-line); border-radius: 10px; padding: 0 15px; background: var(--sonar-panel); color: var(--sonar-text); font-weight: 750; }
+    .sonar-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .sonar-kpi { min-height: 138px; padding: 18px; border: 1px solid var(--sonar-line); border-radius: 16px; background: rgba(16, 19, 17, .82); }
+    .sonar-kpi-label { display: flex; align-items: center; justify-content: space-between; color: var(--sonar-muted); }
+    .sonar-kpi-label span:first-child { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .sonar-kpi-icon { color: var(--sonar-muted); font-size: 17px; }
+    .sonar-kpi strong { display: block; margin-top: 15px; font-size: clamp(25px, 3vw, 38px); line-height: 1; letter-spacing: -.04em; }
+    .sonar-kpi small { display: block; margin-top: 11px; color: var(--sonar-muted); font-size: 11px; }
+    .sonar-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr); gap: 14px; margin-bottom: 14px; }
+    .sonar-card { min-width: 0; padding: 18px; border: 1px solid var(--sonar-line); border-radius: 16px; background: rgba(16, 19, 17, .82); }
+    .sonar-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .sonar-card-head p { margin-top: 3px; color: var(--sonar-muted); font-size: 11px; }
+    .sonar-segmented { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--sonar-line); border-radius: 9px; }
+    .sonar-segmented button { border: 0; border-radius: 6px; padding: 5px 9px; background: transparent; color: var(--sonar-muted); font-size: 11px; }
+    .sonar-segmented button.active { background: var(--sonar-panel-soft); color: var(--sonar-text); }
+    .growth-list { display: grid; }
+    .growth-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px 0; border-top: 1px solid var(--sonar-line); }
+    .growth-row:first-child { border-top: 0; padding-top: 2px; }
+    .growth-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 750; }
+    .growth-meta { margin-top: 4px; color: var(--sonar-muted); font-size: 11px; }
+    .growth-number { text-align: right; color: var(--sonar-accent); font-weight: 850; }
+    .growth-number small { display: block; margin-top: 2px; color: var(--sonar-muted); font-weight: 600; }
+    .sonar-table-wrap { overflow-x: auto; }
+    .sonar-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .sonar-table th { padding: 9px 8px; border-bottom: 1px solid var(--sonar-line); color: var(--sonar-muted); font-size: 10px; font-weight: 800; text-align: right; text-transform: uppercase; }
+    .sonar-table th:first-child, .sonar-table td:first-child { text-align: left; }
+    .sonar-table td { padding: 11px 8px; border-bottom: 1px solid rgba(42, 48, 44, .7); text-align: right; white-space: nowrap; }
+    .sonar-table tr:last-child td { border-bottom: 0; }
+    .sonar-table button { border: 0; background: transparent; color: var(--sonar-text); font-weight: 750; text-align: left; }
+    .sonar-trend { min-height: 310px; }
+    .sonar-chart { width: 100%; min-height: 220px; display: grid; place-items: center; overflow: hidden; }
+    .sonar-chart svg { width: 100%; height: 220px; overflow: visible; }
+    .sonar-chart-grid { stroke: var(--sonar-line); stroke-width: 1; }
+    .sonar-chart-area { fill: url(#sonarArea); }
+    .sonar-chart-line { fill: none; stroke: var(--sonar-text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .sonar-chart-dot { fill: var(--sonar-bg); stroke: var(--sonar-accent); stroke-width: 2; }
+    .sonar-chart-label { fill: var(--sonar-muted); font-size: 10px; }
+    .sonar-empty { min-height: 190px; display: grid; place-items: center; color: var(--sonar-muted); text-align: center; }
+    .topic-list, .insight-list { display: grid; gap: 9px; }
+    .topic-row, .insight-block { padding: 12px; border: 1px solid var(--sonar-line); border-radius: 11px; background: var(--sonar-panel-soft); }
+    .topic-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .topic-row strong { font-size: 13px; }
+    .topic-row span { color: var(--sonar-muted); font-size: 11px; }
+    .insight-block p { margin-top: 7px; color: #c7cec9; white-space: pre-wrap; font-size: 12px; }
+    .insight-evidence { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .insight-evidence span { padding: 3px 7px; border: 1px solid var(--sonar-line); border-radius: 999px; color: var(--sonar-muted); font-size: 10px; }
+    .ai-insight-box { margin-top: 10px; padding: 11px; border: 1px dashed var(--line); border-radius: 11px; background: #fbfcfb; }
+    .ai-topic-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+    .ai-topic-row span { padding: 4px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; }
+    .ai-topic-row button { border: 0; background: transparent; color: var(--green-dark); cursor: pointer; font-size: 10px; }
+
     @media (max-width: 1180px) {
       .login-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workspace { grid-template-columns: 210px minmax(0, 1fr); }
       .detail-panel { grid-column: 1 / -1; height: auto; min-height: 420px; }
       .detail-scroll { overflow: visible; }
+      .sonar-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sonar-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sonar-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 760px) {
       .app { width: 100%; padding: 10px; }
@@ -465,6 +552,11 @@
       .history-row { grid-template-columns: 1fr 1fr; }
       .history-row .history-time { grid-column: 1 / -1; }
       .image-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .sonar-dashboard { padding: 16px; }
+      .sonar-head { flex-direction: column; }
+      .sonar-filters, .sonar-kpis { grid-template-columns: 1fr; }
+      .sonar-grid { grid-template-columns: 1fr; }
+      .sonar-filters .sonar-refresh { width: 100%; }
     }
   </style>
 </head>
@@ -517,10 +609,53 @@
 
     <div class="status" id="statusBar" role="status" aria-live="polite"></div>
 
-    <section class="workspace">
+    <section class="surface sonar-dashboard hidden" id="dashboardPanel" data-view-panel="dashboard" aria-labelledby="dashboardTitle">
+      <div class="sonar-head">
+        <div>
+          <div class="eyebrow">DASHBOARD</div>
+          <h2 id="dashboardTitle">分析仪表盘</h2>
+          <p>跨平台内容规模、互动统算与真实样本趋势。</p>
+        </div>
+        <span class="sonar-ai-state" id="dashboardAiState">正在检查 AI 配置</span>
+      </div>
+      <div class="sonar-filters">
+        <label class="sonar-field">时间范围<select id="dashboardDays"><option value="7">近 7 天</option><option value="14" selected>近 14 天</option><option value="30">近 30 天</option><option value="90">近 90 天</option></select></label>
+        <label class="sonar-field">平台<select id="dashboardPlatform"><option value="">全部平台</option></select></label>
+        <label class="sonar-field">账号<select id="dashboardAccount"><option value="">全部账号</option></select></label>
+        <label class="sonar-field">赛道<select id="dashboardTopic"><option value="">全部赛道</option></select></label>
+        <button class="sonar-refresh" id="dashboardRefresh" type="button">刷新数据</button>
+      </div>
+      <div class="sonar-kpis">
+        <article class="sonar-kpi"><div class="sonar-kpi-label"><span>已收录笔记</span><span class="sonar-kpi-icon">▦</span></div><strong id="sonarNotesTotal">—</strong><small id="sonarNotesCoverage">所有已获取公开数据</small></article>
+        <article class="sonar-kpi"><div class="sonar-kpi-label"><span>互动总量</span><span class="sonar-kpi-icon">⌁</span></div><strong id="sonarEngagementTotal">—</strong><small>点赞 + 收藏 + 评论 + 分享，不含浏览</small></article>
+        <article class="sonar-kpi"><div class="sonar-kpi-label"><span>监控账号</span><span class="sonar-kpi-icon">⌘</span></div><strong id="sonarAccountTotal">—</strong><small>已建立账号档案</small></article>
+        <article class="sonar-kpi"><div class="sonar-kpi-label"><span>近 14 天新增</span><span class="sonar-kpi-icon">↗</span></div><strong id="sonarRecentNotes">—</strong><small id="sonarRecentEngagement">当前累计互动 —</small></article>
+      </div>
+      <div class="sonar-grid">
+        <article class="sonar-card">
+          <div class="sonar-card-head"><div><h2>高增长内容</h2><p>至少两次真实采样，按互动增量排序</p></div><span class="sonar-muted" id="growthCount">0 条</span></div>
+          <div class="growth-list" id="sonarGrowthList"></div>
+        </article>
+        <article class="sonar-card">
+          <div class="sonar-card-head"><div><h2>账号表现</h2><p>每篇笔记只计最新指标</p></div></div>
+          <div class="sonar-table-wrap"><table class="sonar-table"><thead><tr><th>账号</th><th>笔记</th><th>互动</th><th>分享</th><th>洞察</th></tr></thead><tbody id="sonarAccountRows"></tbody></table></div>
+        </article>
+      </div>
+      <article class="sonar-card sonar-trend">
+        <div class="sonar-card-head"><div><h2>内容趋势</h2><p>按发布日期聚合，无数据日期保留为 0</p></div><div class="sonar-segmented"><button type="button" data-trend-mode="new_notes" class="active">新增笔记</button><button type="button" data-trend-mode="current_engagement">当前互动</button></div></div>
+        <div class="sonar-chart" id="sonarTrendChart"></div>
+      </article>
+      <div class="sonar-grid" style="margin-top:14px">
+        <article class="sonar-card"><div class="sonar-card-head"><div><h2>已确认赛道</h2><p>AI 标签需人工确认后进入聚合</p></div></div><div class="topic-list" id="sonarTopicList"></div></article>
+        <article class="sonar-card"><div class="sonar-card-head"><div><h2>AI 洞察</h2><p>账号与赛道分析结果</p></div></div><div class="insight-list" id="sonarInsightList"></div></article>
+      </div>
+    </section>
+
+    <section class="workspace" id="contentWorkspace">
       <aside class="surface panel">
         <div class="panel-head"><h2>视图与日期</h2><span class="count" id="dateCount">0 个日期</span></div>
         <div class="view-switch">
+          <button class="view-btn" data-view="dashboard"><span>分析仪表盘</span><span>AI</span></button>
           <button class="view-btn active" data-view="all"><span>全部笔记</span><span id="allCount">0</span></button>
           <button class="view-btn" data-view="favorites"><span>收藏集</span><span id="favoriteCount">0</span></button>
           <button class="view-btn" data-view="accounts"><span>账号信息</span><span id="accountCount">0</span></button>
@@ -562,6 +697,10 @@
     ];
     let loginStatus = { platforms: [], readyCount: 0, allReady: false, ok: false, error: '' };
     const loginBusy = new Set();
+    let dashboardData = null;
+    let dashboardLoading = false;
+    let dashboardTrendMode = 'new_notes';
+    let archiveAiState = { archiveId: '', insight: null, topics: [], loading: false, polling: null, pollAttempts: 0 };
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -631,7 +770,8 @@
         views: firstPresent(metrics, ['views', 'view_count', 'play_count']),
         likes: firstPresent(metrics, ['likes', 'like_count', 'digg_count']),
         saves: firstPresent(metrics, ['saves', 'favorites', 'collects', 'collect_count', 'favorite_count']),
-        comments: firstPresent(metrics, ['comments', 'comment_count'])
+        comments: firstPresent(metrics, ['comments', 'comment_count']),
+        shares: firstPresent(metrics, ['shares', 'share_count', 'shared_count', 'shareCount', 'reposts', 'repost_count'])
       };
     }
 
@@ -822,6 +962,160 @@
       }
     }
 
+    function dashboardQuery() {
+      const params = new URLSearchParams();
+      params.set('days', String(Math.min(90, Math.max(1, Number.parseInt(document.getElementById('dashboardDays').value, 10) || 14))));
+      if (document.getElementById('dashboardPlatform').value) params.set('platform', document.getElementById('dashboardPlatform').value);
+      if (document.getElementById('dashboardAccount').value) params.set('account_id', document.getElementById('dashboardAccount').value);
+      if (document.getElementById('dashboardTopic').value) params.set('topic', document.getElementById('dashboardTopic').value);
+      return params.toString();
+    }
+
+    function updateSelectOptions(select, items, valueKey, labelFn, emptyLabel) {
+      const current = select.value;
+      select.innerHTML = `<option value="">${escapeHtml(emptyLabel)}</option>${items.map(item => `<option value="${escapeHtml(item[valueKey])}">${escapeHtml(labelFn(item))}</option>`).join('')}`;
+      if (items.some(item => String(item[valueKey]) === String(current))) select.value = current;
+    }
+
+    function renderTrendChart() {
+      const target = document.getElementById('sonarTrendChart');
+      const trend = dashboardData?.trend || [];
+      if (!trend.length) {
+        target.innerHTML = '<div class="sonar-empty">暂无趋势数据</div>';
+        return;
+      }
+      const values = trend.map(item => Number(item[dashboardTrendMode] || 0));
+      const maxValue = Math.max(...values, 1);
+      const width = 900;
+      const height = 220;
+      const left = 24;
+      const right = 20;
+      const top = 18;
+      const bottom = 34;
+      const usableWidth = width - left - right;
+      const usableHeight = height - top - bottom;
+      const points = values.map((value, index) => ({
+        x: left + (values.length === 1 ? usableWidth / 2 : index * usableWidth / (values.length - 1)),
+        y: top + usableHeight - (value / maxValue * usableHeight),
+        value,
+        date: trend[index]?.date || ''
+      }));
+      const line = points.map(point => `${point.x},${point.y}`).join(' ');
+      const area = points.length ? `M ${points[0].x} ${height - bottom} L ${points.map(point => `${point.x} ${point.y}`).join(' L ')} L ${points[points.length - 1].x} ${height - bottom} Z` : '';
+      const labelIndexes = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+      target.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${dashboardTrendMode === 'new_notes' ? '新增笔记趋势' : '当前互动趋势'}">
+        <defs><linearGradient id="sonarArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8a15b" stop-opacity=".24"/><stop offset="1" stop-color="#d8a15b" stop-opacity="0"/></linearGradient></defs>
+        ${[0, .5, 1].map(ratio => `<line class="sonar-chart-grid" x1="${left}" x2="${width - right}" y1="${top + usableHeight * ratio}" y2="${top + usableHeight * ratio}" />`).join('')}
+        <path class="sonar-chart-area" d="${area}" /><polyline class="sonar-chart-line" points="${line}" />
+        ${points.map(point => `<circle class="sonar-chart-dot" cx="${point.x}" cy="${point.y}" r="3"><title>${escapeHtml(point.date)}: ${displayNumber(point.value)}</title></circle>`).join('')}
+        ${labelIndexes.map(index => `<text class="sonar-chart-label" x="${points[index].x}" y="${height - 8}" text-anchor="${index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}">${escapeHtml(String(points[index].date || '').slice(5))}</text>`).join('')}
+      </svg>`;
+    }
+
+    function insightHtml(insight, emptyText = '尚无分析结果') {
+      if (!insight) return `<div class="sonar-empty">${escapeHtml(emptyText)}</div>`;
+      const result = insight.result || {};
+      const summary = result.summary || result.content_pillars || result.common_patterns || '';
+      const evidence = Array.isArray(insight.evidence) ? insight.evidence : [];
+      return `<div class="insight-block"><strong>${escapeHtml(insight.kind || 'AI 分析')}</strong><p>${escapeHtml(Array.isArray(summary) ? summary.join('；') : summary)}</p><div class="insight-evidence">${evidence.slice(0, 8).map(item => `<span>${escapeHtml(item.archive_id || item.evidence || '证据')}</span>`).join('')}</div><small class="muted">${escapeHtml(insight.model || '')} · ${escapeHtml(formatEventTime(insight.generated_at))}</small></div>`;
+    }
+
+    function renderDashboard() {
+      if (!dashboardData) return;
+      const kpi = dashboardData.kpi || {};
+      document.getElementById('sonarNotesTotal').textContent = displayNumber(kpi.notes_count);
+      document.getElementById('sonarEngagementTotal').textContent = displayNumber(kpi.engagement);
+      document.getElementById('sonarAccountTotal').textContent = displayNumber(kpi.monitored_accounts);
+      document.getElementById('sonarRecentNotes').textContent = displayNumber(kpi.recent_new_notes);
+      document.getElementById('sonarRecentEngagement').textContent = `当前累计互动 ${displayNumber(kpi.recent_current_engagement)}`;
+      const growth = dashboardData.high_growth || [];
+      document.getElementById('growthCount').textContent = `${growth.length} 条`;
+      document.getElementById('sonarGrowthList').innerHTML = growth.length ? growth.map(item => `<div class="growth-row"><div><div class="growth-title">${escapeHtml(item.title)}</div><div class="growth-meta">${escapeHtml(item.platform)} · ${escapeHtml(item.account || '账号待识别')} · ${escapeHtml(item.first_captured_at)} → ${escapeHtml(item.last_captured_at)}</div></div><div class="growth-number">+${displayNumber(item.engagement_delta)}<small>互动增量</small></div></div>`).join('') : '<div class="sonar-empty">暂无足够的历史采样；刷新同一条笔记后才会出现真实增长。</div>';
+      const accounts = dashboardData.accounts || [];
+      document.getElementById('sonarAccountRows').innerHTML = accounts.length ? accounts.map(item => `<tr><td><button type="button" data-dashboard-account="${escapeHtml(item.account_id)}">${escapeHtml(item.account_name)}</button><div class="muted">${escapeHtml(item.platform)}</div></td><td>${displayNumber(item.notes_count)}</td><td>${displayNumber(item.engagement)}</td><td>${displayNumber(item.shares)}</td><td><button class="btn secondary small" type="button" data-account-insight="${escapeHtml(item.account_id)}">查看</button></td></tr>`).join('') : '<tr><td colspan="5" class="muted">暂无账号统计</td></tr>';
+      const topics = dashboardData.topics || [];
+      document.getElementById('sonarTopicList').innerHTML = topics.length ? topics.map(item => `<div class="topic-row"><div><strong>${escapeHtml(item.topic)}</strong><div><span>${displayNumber(item.notes_count)} 条已确认内容</span></div></div><button class="btn secondary small" type="button" data-topic-insight="${escapeHtml(item.normalized_topic)}">分析赛道</button></div>`).join('') : '<div class="sonar-empty">在笔记详情中确认 AI 赛道标签后，这里会形成稳定的热点分组。</div>';
+      renderTrendChart();
+    }
+
+    async function loadDashboard() {
+      if (dashboardLoading) return;
+      dashboardLoading = true;
+      try {
+        const [overview, accountMetrics, aiStatus] = await Promise.all([
+          api(`/api/dashboard/overview?${dashboardQuery()}`),
+          api('/api/accounts/metrics?limit=500'),
+          api('/api/ai/status')
+        ]);
+        dashboardData = overview;
+        updateSelectOptions(document.getElementById('dashboardPlatform'), (overview.platform_distribution || []).map(item => ({ value: item.platform, label: item.platform })), 'value', item => item.label, '全部平台');
+        updateSelectOptions(document.getElementById('dashboardAccount'), accountMetrics.items || [], 'account_id', item => `${item.platform} · ${item.account_name}`, '全部账号');
+        updateSelectOptions(document.getElementById('dashboardTopic'), overview.topics || [], 'normalized_topic', item => item.topic, '全部赛道');
+        const state = document.getElementById('dashboardAiState');
+        state.className = `sonar-ai-state ${aiStatus.configured ? 'ready' : ''}`;
+        state.textContent = aiStatus.configured ? `AI 已配置 · ${aiStatus.model}` : 'AI 未配置，统计功能仍可用';
+        renderDashboard();
+      } catch (error) {
+        setStatus(`仪表盘读取失败：${error.message}`, 'error');
+      } finally {
+        dashboardLoading = false;
+      }
+    }
+
+    async function pollDashboardJob(jobId, onSuccess) {
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        const data = await api(`/api/ai/jobs/${encodeURIComponent(jobId)}`);
+        if (data.job?.status === 'success' || data.insight) {
+          await onSuccess();
+          return;
+        }
+        if (data.job?.status === 'failed') throw new Error(data.job.error || 'AI 任务失败');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      throw new Error('AI 任务仍在处理中，请稍后刷新');
+    }
+
+    async function loadDashboardTopicInsight(topic, force = false) {
+      const encoded = encodeURIComponent(topic);
+      const renderResult = async () => {
+        const data = await api(`/api/topics/${encoded}/insight`);
+        document.getElementById('sonarInsightList').innerHTML = insightHtml(data.insight, '该赛道尚无 AI 洞察');
+      };
+      try {
+        if (force) {
+          const queued = await api(`/api/topics/${encoded}/insight`, { method: 'POST', body: '{}' });
+          if (queued.queued && queued.job_id) {
+            document.getElementById('sonarInsightList').innerHTML = '<div class="sonar-empty">赛道分析已排队，正在等待模型结果…</div>';
+            await pollDashboardJob(queued.job_id, renderResult);
+            return;
+          }
+        }
+        await renderResult();
+      } catch (error) {
+        setStatus(`赛道分析失败：${error.message}`, 'error');
+      }
+    }
+
+    async function loadDashboardAccountInsight(accountId, force = false) {
+      const renderResult = async () => {
+        const data = await api(`/api/accounts/${encodeURIComponent(accountId)}/insight`);
+        document.getElementById('sonarInsightList').innerHTML = insightHtml(data.insight, '该账号尚无 AI 洞察');
+      };
+      try {
+        if (force) {
+          const queued = await api(`/api/accounts/${encodeURIComponent(accountId)}/insight`, { method: 'POST', body: '{}' });
+          if (queued.queued && queued.job_id) {
+            document.getElementById('sonarInsightList').innerHTML = '<div class="sonar-empty">账号分析已排队，正在等待模型结果…</div>';
+            await pollDashboardJob(queued.job_id, renderResult);
+            return;
+          }
+        }
+        await renderResult();
+      } catch (error) {
+        setStatus(`账号分析失败：${error.message}`, 'error');
+      }
+    }
+
     async function loadRecords(options = {}) {
       const data = await api('/api/archives');
       const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
@@ -892,7 +1186,7 @@
           <span class="note-title">${escapeHtml(item.title)}</span>
           <span>
             <span class="note-meta"><span>${escapeHtml(item.author)}</span><span>${escapeHtml(publishedTime(item))}</span>${item.favorite ? '<span class="favorite-tag">已收藏</span>' : ''}</span>
-            <span class="metric-row"><span>点赞 ${displayNumber(item.metrics.likes)}</span><span>收藏 ${displayNumber(item.metrics.saves)}</span><span>评论 ${displayNumber(item.metrics.comments)}</span></span>
+            <span class="metric-row"><span>点赞 ${displayNumber(item.metrics.likes)}</span><span>收藏 ${displayNumber(item.metrics.saves)}</span><span>评论 ${displayNumber(item.metrics.comments)}</span><span>分享 ${displayNumber(item.metrics.shares)}</span></span>
           </span>
         </span>
       </button>`;
@@ -969,6 +1263,99 @@
       </article>`;
     }
 
+    function renderArchiveAiHtml(item) {
+      if (!item || String(item.id) !== String(archiveAiState.archiveId)) {
+        return '<div class="ai-insight-box"><span class="muted">AI 将基于已脱敏的真实快照、公开指标和评论样本生成“可能爆点”，不会断言因果。</span><div class="detail-actions"><button class="btn secondary small" data-action="ai-load">查看已有洞察</button><button class="btn primary small" data-action="ai-run">生成 AI 洞察</button></div></div>';
+      }
+      if (archiveAiState.loading) return '<div class="ai-insight-box"><span class="muted">正在读取 AI 任务和赛道标签…</span></div>';
+      const insight = archiveAiState.insight;
+      const result = insight?.result || {};
+      const topics = archiveAiState.topics || [];
+      const topicHtml = topics.length ? topics.map(topic => `<span>${escapeHtml(topic.topic)} ${topic.confirmed ? '已确认' : 'AI 候选'} ${topic.confirmed ? '' : `<button type="button" data-topic-confirm="${escapeHtml(topic.id)}">确认</button>`}</span>`).join('') : '<span class="muted">生成洞察后会出现赛道候选</span>';
+      const summary = result.summary || '';
+      return `<div class="ai-insight-box"><div class="detail-actions"><button class="btn secondary small" data-action="ai-load">刷新</button><button class="btn primary small" data-action="ai-run">重新分析</button></div>${insight ? `<p class="summary">${escapeHtml(summary)}</p><small class="muted">${escapeHtml(insight.model || '')} · ${escapeHtml(formatEventTime(insight.generated_at))} · 仅基于已采集样本</small>` : '<p class="muted">尚无可用洞察，生成后会自动轮询任务状态。</p>'}<div class="ai-topic-row">${topicHtml}</div></div>`;
+    }
+
+    async function pollArchiveAi(jobId, targetArchiveId) {
+      if (archiveAiState.polling) clearTimeout(archiveAiState.polling);
+      const poll = async () => {
+        if (String(selectedId) !== String(targetArchiveId) || String(archiveAiState.archiveId) !== String(targetArchiveId)) return;
+        archiveAiState.pollAttempts = Number(archiveAiState.pollAttempts || 0) + 1;
+        if (archiveAiState.pollAttempts > 60) {
+          archiveAiState.polling = null;
+          archiveAiState.loading = false;
+          renderDetail();
+          setStatus('AI 任务仍在处理中，已停止自动轮询；稍后可手动刷新。', 'warning');
+          return;
+        }
+        try {
+          const data = await api(`/api/ai/jobs/${encodeURIComponent(jobId)}`);
+          if (String(selectedId) !== String(targetArchiveId) || String(archiveAiState.archiveId) !== String(targetArchiveId)) return;
+          if (data.job?.status === 'success' || data.insight) {
+            archiveAiState.polling = null;
+            await loadArchiveAi(String(targetArchiveId));
+            setStatus('AI 洞察已生成，赛道候选等待人工确认。');
+            return;
+          }
+          if (data.job?.status === 'failed') {
+            archiveAiState.polling = null;
+            archiveAiState.loading = false;
+            renderDetail();
+            setStatus(`AI 分析失败：${data.job.error || '模型任务失败'}`, 'error');
+            return;
+          }
+          archiveAiState.polling = setTimeout(poll, 1800);
+        } catch (error) {
+          archiveAiState.polling = null;
+          archiveAiState.loading = false;
+          renderDetail();
+          setStatus(`AI 任务状态读取失败：${error.message}`, 'error');
+        }
+      };
+      archiveAiState.polling = setTimeout(poll, 800);
+    }
+
+    async function loadArchiveAi(archiveId, force = false) {
+      if (!archiveId) return;
+      if (archiveAiState.polling) clearTimeout(archiveAiState.polling);
+      archiveAiState = { archiveId: String(archiveId), insight: null, topics: [], loading: true, polling: null, pollAttempts: 0 };
+      renderDetail();
+      try {
+        if (force) {
+          const queued = await api(`/api/archives/${encodeURIComponent(archiveId)}/insight`, { method: 'POST', body: '{}' });
+          if (queued.queued && queued.job_id) {
+            await pollArchiveAi(queued.job_id, archiveId);
+            return;
+          }
+          if (queued.reason === 'AI_NOT_CONFIGURED') throw new Error('AI 尚未配置 LITELLM_MODEL');
+        }
+        const [insightData, topicData] = await Promise.all([
+          api(`/api/archives/${encodeURIComponent(archiveId)}/insight`),
+          api(`/api/archives/${encodeURIComponent(archiveId)}/topics`)
+        ]);
+        archiveAiState.insight = insightData.insight;
+        archiveAiState.topics = topicData.topics || [];
+      } catch (error) {
+        setStatus(`AI 洞察读取失败：${error.message}`, 'error');
+      } finally {
+        archiveAiState.loading = false;
+        renderDetail();
+      }
+    }
+
+    async function confirmContentTopic(topicId) {
+      try {
+        await api(`/api/content-topics/${encodeURIComponent(topicId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ confirmed: true })
+        });
+        await loadArchiveAi(String(selectedId));
+        setStatus('赛道标签已确认；达到样本门槛后已自动加入赛道分析。');
+      } catch (error) {
+        setStatus(`赛道标签确认失败：${error.message}`, 'error');
+      }
+    }
+
     function renderDetail() {
       const item = records.find(record => String(record.id) === String(selectedId));
       const status = document.getElementById('detailStatus');
@@ -1004,6 +1391,7 @@
             <span>点赞 ${displayNumber(entry.likes)}</span>
             <span>收藏 ${displayNumber(entry.saves)}</span>
             <span>评论 ${displayNumber(entry.comments)}</span>
+            <span>分享 ${displayNumber(entry.shares)}</span>
           </div>`).join('')}</div>`
         : '<div class="empty">更新数据后，这里会显示真实指标的历史记录</div>';
       area.innerHTML = `
@@ -1020,7 +1408,9 @@
           <div class="metric-box"><span>点赞</span><strong>${displayNumber(item.metrics.likes)}</strong></div>
           <div class="metric-box"><span>收藏</span><strong>${displayNumber(item.metrics.saves)}</strong></div>
           <div class="metric-box"><span>评论</span><strong>${displayNumber(item.metrics.comments)}</strong></div>
+          <div class="metric-box"><span>分享/转发</span><strong>${displayNumber(item.metrics.shares)}</strong></div>
         </div>
+        <section class="detail-section"><h3>AI 洞察</h3>${renderArchiveAiHtml(item)}</section>
         <section class="detail-section"><h3>数据变化</h3>${history}</section>
         <section class="detail-section"><h3>原文摘要</h3><div class="summary">${escapeHtml(item.description || '尚未获取到公开原文摘要')}</div></section>
         <div class="detail-actions">
@@ -1034,8 +1424,17 @@
     }
 
     function render() {
-      document.getElementById('headerStat').textContent = `${records.length} 条已保存笔记`;
+      const dashboardMode = selectedView === 'dashboard';
+      document.getElementById('headerStat').textContent = dashboardMode ? '真实数据统算与 AI 洞察' : `${records.length} 条已保存笔记`;
+      document.querySelector('.add-note').classList.toggle('hidden', dashboardMode);
+      document.querySelector('.login-manager').classList.toggle('hidden', dashboardMode);
+      document.getElementById('dashboardPanel').classList.toggle('hidden', !dashboardMode);
+      document.getElementById('contentWorkspace').classList.toggle('hidden', dashboardMode);
       renderNavigation();
+      if (dashboardMode) {
+        loadDashboard();
+        return;
+      }
       renderList();
       renderDetail();
     }
@@ -1219,10 +1618,42 @@
       render();
     });
     document.getElementById('detailArea').addEventListener('click', event => {
+      const topicId = event.target.closest('[data-topic-confirm]')?.dataset.topicConfirm;
+      if (topicId) {
+        confirmContentTopic(topicId);
+        return;
+      }
       const action = event.target.closest('[data-action]')?.dataset.action;
       if (action === 'refresh') refreshSelected();
       if (action === 'favorite') toggleFavorite();
       if (action === 'delete') deleteSelected();
+      if (action === 'ai-load') loadArchiveAi(String(selectedId), false);
+      if (action === 'ai-run') loadArchiveAi(String(selectedId), true);
+    });
+    ['dashboardDays', 'dashboardPlatform', 'dashboardAccount', 'dashboardTopic'].forEach(id => {
+      document.getElementById(id).addEventListener('change', loadDashboard);
+    });
+    document.getElementById('dashboardRefresh').addEventListener('click', loadDashboard);
+    document.querySelector('.sonar-segmented').addEventListener('click', event => {
+      const button = event.target.closest('[data-trend-mode]');
+      if (!button) return;
+      dashboardTrendMode = button.dataset.trendMode;
+      document.querySelectorAll('[data-trend-mode]').forEach(item => item.classList.toggle('active', item === button));
+      renderTrendChart();
+    });
+    document.getElementById('sonarAccountRows').addEventListener('click', event => {
+      const filterButton = event.target.closest('[data-dashboard-account]');
+      if (filterButton) {
+        document.getElementById('dashboardAccount').value = filterButton.dataset.dashboardAccount;
+        loadDashboard();
+        return;
+      }
+      const insightButton = event.target.closest('[data-account-insight]');
+      if (insightButton) loadDashboardAccountInsight(insightButton.dataset.accountInsight, true);
+    });
+    document.getElementById('sonarTopicList').addEventListener('click', event => {
+      const button = event.target.closest('[data-topic-insight]');
+      if (button) loadDashboardTopicInsight(button.dataset.topicInsight, true);
     });
 
     setAddMode('link');

@@ -7,12 +7,12 @@ if [ -f "$RUNTIME_ENV" ]; then
   . "$RUNTIME_ENV"
   set +a
 fi
-HEADER=()
-if [ -n "${SCRAPER_API_KEY:-}" ]; then
-  HEADER=(-H "X-API-Key: $SCRAPER_API_KEY")
-fi
 printf '%s\n' 'Scraper:'
-curl -fsS "${HEADER[@]}" http://127.0.0.1:8007/api/status
+if [ -n "${SCRAPER_API_KEY:-}" ]; then
+  curl -fsS -H "X-API-Key: $SCRAPER_API_KEY" http://127.0.0.1:8007/api/status
+else
+  curl -fsS http://127.0.0.1:8007/api/status
+fi
 PANEL_PORT="${PANEL_PORT:-5060}"
 printf '\n%s\n' 'Panel:'
 curl -fsS "http://127.0.0.1:${PANEL_PORT}/api/health"

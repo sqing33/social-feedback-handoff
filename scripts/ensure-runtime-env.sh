@@ -10,6 +10,19 @@ chmod 700 "$RUNTIME_DIR"
 
 if [ -f "$ENV_FILE" ]; then
   chmod 600 "$ENV_FILE"
+  for setting in \
+    'AI_ANALYSIS_ENABLED=1' \
+    'LITELLM_MODEL=' \
+    'LITELLM_API_KEY=' \
+    'LITELLM_API_BASE=' \
+    'LITELLM_TIMEOUT_SECONDS=90' \
+    'LITELLM_MAX_PENDING_JOBS=50'; do
+    key="${setting%%=*}"
+    if ! grep -q "^${key}=" "$ENV_FILE"; then
+      printf '%s\n' "$setting" >> "$ENV_FILE"
+    fi
+  done
+  chmod 600 "$ENV_FILE"
   exit 0
 fi
 
@@ -33,6 +46,12 @@ ENABLE_BROWSER_ADMIN=0
 ALLOW_LEGACY_WRITE_API=0
 ALLOW_GENERIC_PUBLIC_CAPTURE=0
 SCRAPER_API_KEY=$API_KEY
+AI_ANALYSIS_ENABLED=1
+LITELLM_MODEL=
+LITELLM_API_KEY=
+LITELLM_API_BASE=
+LITELLM_TIMEOUT_SECONDS=90
+LITELLM_MAX_PENDING_JOBS=50
 EOF
 chmod 600 "$TMP_FILE"
 mv "$TMP_FILE" "$ENV_FILE"
